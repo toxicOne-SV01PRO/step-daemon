@@ -1,9 +1,25 @@
+/*
+ * Copyright 2017 Colin Godsey
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.colingodsey.stepd.planner
 
 import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.stepd.CommandParser._
-import com.colingodsey.stepd.LineSerial
+import com.colingodsey.stepd.{LineSerial, Parser}
 import com.colingodsey.stepd.planner.Math.{Accel, Jerk, MathFault, Position}
 import com.colingodsey.stepd.Parser.{CMove, GCodeCommand}
 
@@ -181,6 +197,7 @@ class PhysicsProcessorActor(val next: ActorRef, val acc: Accel, val jerk: Jerk) 
 
 class StepProcessorActor(val next: ActorRef, val steps: StepProcessor.StepSettings, val leveling: MeshLeveling.Reader) extends StepProcessor with Pipeline {
   var splits = new Array[Int](4)
+  var hasSentSpeed = false
 
   def recordSplit(idx: Int): Unit = {
     splits(idx) = splits(idx) + 1
@@ -189,6 +206,12 @@ class StepProcessorActor(val next: ActorRef, val steps: StepProcessor.StepSettin
   }
 
   def processChunk(chunk: ByteString): Unit = {
+    if(!hasSentSpeed) {
+      hasSentSpeed = true
+
+      sendDown(Parser.Raw("C0 S" + steps.ticksPerSecond.toInt))
+    }
+
     sendDown(chunk)
   }
 

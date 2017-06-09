@@ -1,3 +1,19 @@
+/*
+ * Copyright 2017 Colin Godsey
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.colingodsey.print3d.debug
 
 import java.util.Scanner
@@ -31,7 +47,7 @@ class UI extends Application {
   var trapIdx = 0
   var lastPos = Position.Zero
 
-  val speedScale = 0.5
+  val speedScale = 1.0
 
   val root = new StackPane
   val scene = new Scene(root, 800, 600)
@@ -218,7 +234,7 @@ class SerialTest(gcodeSerial: ActorRef, rawSerial: ActorRef) extends Actor with 
 
 class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with CommandParser with ActorLogging {
   //val stream = getClass.getResourceAsStream("/g_test1.gcode")
-  val stream = getClass.getResourceAsStream("/xyzCalibration_cube.gcode")
+  val stream = getClass.getResourceAsStream("/hellbenchy.gcode")
   //val stream = getClass.getResourceAsStream("/test2.gcode")
   //val lines = scala.io.Source.fromInputStream(stream).getLines.mkString("\r\n")
 
