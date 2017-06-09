@@ -20,13 +20,11 @@ import Math._
 
 import scala.util.control.NoStackTrace
 
-
-//takes move deltas, and produces iterable positions
+/* takes move deltas, and produces iterable positions */
 trait PhysicsProcessor {
   def acc: Accel
   def jerk: Jerk
 
-  //TODO: redo this to stash next G command period?
   var lastDelta = MoveDelta.Empty
   var curDelta = MoveDelta.Empty
 
@@ -46,12 +44,6 @@ trait PhysicsProcessor {
     processDelta(MoveDelta.Empty)
     processDelta(MoveDelta.Empty)
   }
-
-  //TODO: add check where moveDelta can predict if post delta will have to slow down?
-  //this can actually probably be done just on the moveDelta level?
-
-  //TODO: keep last trap, use its end rate as the start rate for the next trap?
-  ///^^^^^^^^^^^^^^^^^^^^^^^
 
   def willStartFrCauseResize(startFr: Double, post: MoveDelta): Boolean = {
     val dfr = post.f - startFr
@@ -123,15 +115,6 @@ trait PhysicsProcessor {
         require(nextDelta.f > 0.001, "unable to handle LookaheadHalt")
 
         processDelta(nextDelta.scaleFr(0.5))
-
-        /*
-
-        /* add an extra empty delta here. We know the next trap will bust, but the next
-        trap doesnt know that we brought this one to a halt, so add an actual empty move */
-        processDelta(MoveDelta.Empty)
-        processDelta(nextDelta)
-
-        */
     }
   }
 }
