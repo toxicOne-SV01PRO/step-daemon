@@ -1,0 +1,167 @@
+package com.colingodsey.stepd.planner
+
+import utest._
+import Math._
+
+object DummyTest extends TestSuite {
+  import DeltaProcessor._
+
+  object Test100Square {
+    val moves = Seq(
+      Move(0, 100, 0, 10, 80),
+      Move(100, 100, 0, 0, 60),
+      Move(100, 0, 0, 10, 30),
+      Move(0, 0, 0, 0, 40),
+      Move(100, 100, 0, 0, 50),
+      Move(0, 0, 0, 0, 30),
+      Move(50, 100, 0, 0, 80)
+    )
+  }
+  class Test100Square extends TestSquare(Test100Square.moves)
+
+  object Test100RandomSquare {
+    def moves(n: Int) = for(_ <- 0 until n) yield {
+      val fr = math.random * 50 + 5
+
+      Move(math.random.toFloat * 100.0f,
+        math.random.toFloat * 100.0f,
+        math.random.toFloat * 100.0f,
+        math.random.toFloat * 100.0f,
+        fr.toFloat)
+    }
+  }
+  class Test100RandomSquare(nMoves: Int = 100, tick: Double = 0.0008f) extends TestSquare(Test100RandomSquare.moves(nMoves), tick)
+
+  class TestSquare(moves: Seq[Move], tick: Double = 0.01f) {
+    var resizes = 0
+
+    val phase = new PhysicsProcessor {
+      //val acc: Accel = Position.One * 0.01f
+      val acc: Accel = Position(2000, 1500, 100, 10000)
+      val jerk: Jerk = Position(15, 10, 0.4f, 5)
+
+      var trap: Trapezoid = null
+
+
+      def processTrapezoid(trap: Trapezoid): Unit = this.trap = trap
+
+      def recordLookaheadHalt(): Unit = {}
+
+      def recordFault(fault: MathFault): Unit = resizes += 1
+    }
+
+    val deltas = {
+      var lastPos: Position = Position.Zero
+
+      moves map { move =>
+        val d = MoveDelta(lastPos, move, move.f)
+
+        lastPos = move
+
+        d
+      }
+    }
+
+    def run(pointFunc: (Position, Double) => Unit): Unit = {
+      var t = 0.0
+
+      for(i <- 0 until deltas.length) {
+        val delta = deltas(i)
+        val preDelta = if(i == 0) delta else deltas(i - 1)
+        val postDelta = if(i == (deltas.length - 1)) delta else deltas(i + 1)
+
+        phase.processTrapezoidSafe(preDelta, delta, postDelta, 5)
+
+        val trap = phase.trap
+        var dt = 0.0
+
+        trap.posIterator(tick) foreach { pos =>
+          pointFunc(pos, dt + t)
+
+          dt += tick
+        }
+
+        t += trap.time
+      }
+    }
+  }
+
+  val tests = this {
+    'Traptest {
+      val delta = MoveDelta(
+        Position(0, 0, 0, 0),
+        Position(10, 0, 0, 0),
+        1
+      )
+
+      val trap = Trapezoid(0.5f, 0.1f, delta, -0.1f, 0.5f)
+      //val trap = Trapezoid(0f, 0.1f, delta, -0.1f, 0f)
+
+      println(trap.accelTime, trap.coastTime, trap.deccelTime, trap.time)
+
+      val tick = 0.001f
+
+      var dt = 0.0f
+
+      while(dt < trap.time) {
+        val d = trap.getPos(dt)
+
+        val pos = trap.move.from + trap.move.d.normal * d
+
+        //println(s"${dt}, ${pos.x}, ${pos.y}, ${pos.z}, ${pos.e}")
+
+        dt += tick
+      }
+    }
+
+    'printTest {
+      val test = new Test100Square
+
+      test.run { (pos, t) =>
+        //println(s"$t, ${pos.x}, ${pos.y}, ${pos.z}, ${pos.e}")
+      }
+    }
+
+    'printRandTest {
+      val test = new Test100RandomSquare(10, 0.01f)
+
+      test.run { (pos, t) =>
+        println(s"$t, ${pos.x}, ${pos.y}, ${pos.z}, ${pos.e}")
+      }
+    }
+
+    'boundsTest {
+      val test = new Test100Square
+      var lastT = 0.0
+      var i = 0
+
+      test.run { (pos, t) =>
+        require(pos.x < 100.0001 && pos.x > -0.0001, "x bounds failed " + pos.x)
+        require(pos.y < 100.0001 && pos.y > -0.0001, "y bounds failed " + pos.y)
+
+        lastT = t
+        i += 1
+      }
+
+      require(test.resizes == 0)
+
+      println(s"t: $lastT i: $i resizes: ${test.resizes}")
+    }
+
+    'boundsTest2 {
+      val test = new Test100RandomSquare(100)
+      var lastT = 0.0
+      var i = 0
+
+      test.run { (pos, t) =>
+        require(pos.x < 100.0001 && pos.x > -0.0001, "x bounds failed " + pos.x)
+        require(pos.y < 100.0001 && pos.y > -0.0001, "y bounds failed " + pos.y)
+
+        lastT = t
+        i += 1
+      }
+
+      println(s"t: $lastT i: $i resizes: ${test.resizes}")
+    }
+  }
+}
