@@ -17,16 +17,10 @@
 package com.colingodsey.stepd.planner
 
 import akka.util.ByteString
-import com.colingodsey.stepd.CommandParser.SetPos
-import com.colingodsey.stepd.planner.Math.Position
+import com.colingodsey.stepd.GCode.SetPos
+import com.colingodsey.stepd.Math.Vector4D
 
 object StepProcessor {
-  trait StepSettings {
-    def perUnit: Position
-
-    def ticksPerSecond: Double
-  }
-
   final val BytesPerChunk = 256
   final val BytesPerBlock = 2
   final val StepsPerBlock = 8 //actually 7, but we math it at 3 bits
@@ -38,8 +32,9 @@ object StepProcessor {
 trait StepProcessor {
   import StepProcessor._
 
-  def steps: StepSettings
-  def leveling: MeshLeveling.Reader
+  def stepsPerMM: Vector4D
+  def ticksPerSecond: Int
+  def leveling: MeshLevelingReader
 
   var stepPosX = 0L
   var stepPosY = 0L
@@ -58,12 +53,13 @@ trait StepProcessor {
   def processChunk(chunk: ByteString): Unit
 
   def setPos(setPos: SetPos): Unit = {
+    //TODO: if setting Z, should we reference the leveling offset?
     //val zOffs = leveling.getOffset(pos.x.toFloat, pos.y.toFloat)
 
-    setPos.x.foreach(x => stepPosX = (x * steps.perUnit.x).round)
-    setPos.y.foreach(y => stepPosY = (y * steps.perUnit.y).round)
-    setPos.z.foreach(z => stepPosZ = (z * steps.perUnit.z).round)
-    setPos.e.foreach(e => stepPosE = (e * steps.perUnit.e).round)
+    setPos.x.foreach(x => stepPosX = (x * stepsPerMM.x).round)
+    setPos.y.foreach(y => stepPosY = (y * stepsPerMM.y).round)
+    setPos.z.foreach(z => stepPosZ = (z * stepsPerMM.z).round)
+    setPos.e.foreach(e => stepPosE = (e * stepsPerMM.e).round)
   }
 
   def flushChunk(): Unit = if(chunkIndex > 0) {
@@ -125,15 +121,15 @@ trait StepProcessor {
   }
 
   def processTrap(trap: Trapezoid): Unit = {
-    val iter = trap.posIterator(steps.ticksPerSecond / StepsPerBlock)
+    val iter = trap.posIterator(ticksPerSecond / StepsPerBlock)
 
     for(pos <- iter) {
-      val zOffs = leveling.getOffset(pos.x.toFloat, pos.y.toFloat)
+      val zOffset = leveling.getOffset(pos.x, pos.y)
 
-      val stepPosXDest = (pos.x * steps.perUnit.x).round
-      val stepPosYDest = (pos.y * steps.perUnit.y).round
-      val stepPosZDest = ((pos.z + zOffs) * steps.perUnit.z).round
-      val stepPosEDest = (pos.e * steps.perUnit.e).round
+      val stepPosXDest = (pos.x             * stepsPerMM.x).round
+      val stepPosYDest = (pos.y             * stepsPerMM.y).round
+      val stepPosZDest = ((pos.z + zOffset) * stepsPerMM.z).round
+      val stepPosEDest = (pos.e             * stepsPerMM.e).round
 
       val dx = stepPosXDest - stepPosX
       val dy = stepPosYDest - stepPosY

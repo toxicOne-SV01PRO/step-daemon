@@ -16,9 +16,7 @@
 
 package com.colingodsey.stepd.planner
 
-import Math._
-import akka.util.ByteString
-import com.colingodsey.stepd.planner
+import com.colingodsey.stepd.Math._
 
 final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double) {
   val accelDf = move.f - frStart
@@ -41,10 +39,10 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
   if(accelDist > halfDist) throw PreEaseLimit
   if(deccelDist > halfDist) throw PostEaseLimit
 
-  require(accelTime >= 0, this.toString)
-  require(deccelTime >= 0, this.toString)
-  require(accelDist >= 0, this.toString)
-  require(deccelDist >= 0, this.toString)
+  require(accelTime >= 0, (accelTime, this).toString)
+  require(deccelTime >= 0, (deccelTime, this).toString)
+  require(accelDist >= 0, (accelDist, this).toString)
+  require(deccelDist >= 0, (deccelDist, this).toString)
 
   def getPos(t: Double): Double = {
     val ret = if(t < accelTime)
@@ -62,7 +60,7 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
     clamp(0.0, ret, move.length)
   }
 
-  def posIterator(tickRate: Double): Iterator[Position] = new Iterator[Position] {
+  def posIterator(tickRate: Double): Iterator[Vector4D] = new Iterator[Vector4D] {
     val ticks = (time * tickRate).toInt
     val div = time / ticks
 
@@ -70,7 +68,7 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
 
     def hasNext: Boolean = tick < ticks
 
-    def next(): Position = {
+    def next(): Vector4D = {
       val x = if(tick == 0) move.from
       else move.from + move.d.normal * getPos(tick * div)
 
@@ -79,40 +77,4 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
       x
     }
   }
-}
-
-object MoveDelta {
-  val Empty = MoveDelta(Position.Zero, Position.Zero, 0)
-}
-
-final case class MoveDelta(from: Position, to: Position, f: Double) {
-  val d = to - from
-  val time = (d.length / f)
-  val v = d / time
-  val isValid = d.length > 0
-
-  //warm normal lazy val
-  d.normal
-
-  def length = d.length
-
-  def isEOrZOnly = d.x == 0 && d.y == 0
-
-  def scaleFr(scale: Double) = copy(f = f * scale)
-}
-
-object Chunk {
-  val chunkHeader = ByteString.fromString("!")
-  val chunkFooter = ByteString.empty //ByteString.fromString("\r\n")
-}
-
-case class Chunk(rawBytes: ByteString) {
-  import Chunk._
-
-  require(rawBytes.length == StepProcessor.BytesPerChunk)
-
-  val check = rawBytes.foldLeft(0)(_ ^ _) & 0xFF
-  val chunk = chunkHeader ++ rawBytes ++ ByteString(check.toByte) ++ chunkFooter
-
-  def length = chunk.length
 }

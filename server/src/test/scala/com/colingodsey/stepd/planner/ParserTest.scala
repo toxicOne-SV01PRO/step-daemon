@@ -17,10 +17,7 @@
 package com.colingodsey.stepd.planner
 
 import utest._
-import Math._
-import com.colingodsey.stepd.Parser._
-import com.colingodsey.stepd.CommandParser._
-import com.colingodsey.stepd.CommandParser
+import com.colingodsey.stepd.GCode._
 import com.colingodsey.stepd.{CommandParser, Parser}
 
 import scala.io.Source
@@ -40,7 +37,7 @@ object ParserTest extends TestSuite {
       )
 
       object testParser extends Parser with CommandParser {
-        def process(cmd: Parser.GCodeCommand): Unit = {
+        def process(cmd: GCodeCommand): Unit = {
           //println(cmd)
           outCmds += cmd
         }

@@ -69,9 +69,7 @@ object Build {
     libraryDependencies += "org.apache.commons" % "commons-imaging" % "1.0-SNAPSHOT",
     libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6.1",
 
-    //libraryDependencies += "com.fazecast" % "jSerialComm" % "1.3.11",
-    //libraryDependencies += "com.neuronrobotics" % "nrjavaserial" % "3.13.0"
-    libraryDependencies += "org.scream3r" % "jssc" % "2.8.0",
+    libraryDependencies += "org.scream3r" % "jssc" % "2.8.0"
   )
 
   def jsSettings = Seq(

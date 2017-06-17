@@ -16,104 +16,22 @@
 
 package com.colingodsey.stepd
 
-import planner.Math._
-
-object Parser {
-  sealed trait GCodeCommand {
-    def raw: Raw
-    def isGCommand: Boolean
-  }
-
-  case class Raw(line: String) extends GCodeCommand {
-    private val split = line.split(' ').toStream.filter(_.nonEmpty)
-
-    val cmd = split.head
-    val parts = split.tail
-
-    def raw = this
-
-    def isGCommand = cmd(0) == 'G'
-
-    def getPart(ident: Char): Option[String] =
-      parts.filter(_.head == ident).headOption.map(_.tail)
-  }
-
-  case class CMove(chunkIdx: Int, nChunks: Int) extends GCodeCommand {
-    val raw = Raw(s"C0 I$chunkIdx R$nChunks")
-
-    def isGCommand: Boolean = false
-  }
-
-  def calcChecksum(str: String): Int =
-    str.iterator.map(_.toByte).foldLeft(0)(_ ^ _) & 0xFF
-}
-
-object CommandParser {
-  import Parser._
-
-  sealed trait MCommand extends GCodeCommand {
-    def isGCommand = false
-  }
-  sealed trait GCommand extends GCodeCommand {
-    def isGCommand = true
-  }
-
-  object GMove {
-    def apply(raw: Raw): GMove =
-      GMove(
-        raw.getPart('X').map(_.toDouble),
-        raw.getPart('Y').map(_.toDouble),
-        raw.getPart('Z').map(_.toDouble),
-        raw.getPart('E').map(_.toDouble),
-        raw.getPart('F').map(_.toDouble)
-      )(raw)
-  }
-
-  case class GMove(x: Option[Double], y: Option[Double], z: Option[Double], e: Option[Double], f: Option[Double])(val raw: Raw) extends GCommand {
-    def isFrOnly = x == None && y == None && z == None && e == None && f.isDefined
-  }
-
-  object SetPos {
-    def apply(raw: Raw): SetPos =
-      SetPos(
-        raw.getPart('X').map(_.toDouble),
-        raw.getPart('Y').map(_.toDouble),
-        raw.getPart('Z').map(_.toDouble),
-        raw.getPart('E').map(_.toDouble)
-      )(raw)
-
-    def apply(pos: Position): SetPos = {
-      val line = s"G92 X${pos.x.toFloat} Y${pos.y.toFloat} Z${pos.z.toFloat} E${pos.e.toFloat}"
-
-      SetPos(
-        Some(pos.x),
-        Some(pos.y),
-        Some(pos.z),
-        Some(pos.e)
-      )(Raw(line))
-    }
-  }
-
-  case class SetPos(x: Option[Double], y: Option[Double], z: Option[Double], e: Option[Double])(val raw: Raw) extends GCommand
-
-  case object M114 extends MCommand {
-    val raw = Raw("M114")
-  }
-}
+import com.colingodsey.stepd.GCode._
 
 trait CommandParser {
-  import CommandParser._
-  import Parser._
-
   def process(cmd: GCodeCommand): Unit
 
   def process(raw: Raw): Unit = {
     val out: GCodeCommand = raw.cmd match {
       case "G0" | "G1" => GMove(raw)
       case "G92" => SetPos(raw)
-      case "G28" | "G29" =>
-        //get position after other G commands
+      case "G28" =>
+        //get position after homing
         process(raw: GCodeCommand)
+        M114
+      case "G29" =>
+        //send the verbose version of the command
+        process(Raw("G29 V3 T"))
         M114
       case "M114" => M114
       case _ => raw
@@ -124,11 +42,9 @@ trait CommandParser {
 }
 
 trait Parser {
-  import Parser._
-
-  val buffer = new Array[Char](1024)
-  var idx = 0
-  var lastN = 0
+  private val buffer = new Array[Char](1024)
+  private var idx = 0
+  private var lastN = 0
 
   def process(cmd: Raw): Unit
 
@@ -171,4 +87,10 @@ trait Parser {
       buffer(idx) = c
       idx += 1
   }
+
+  def process(byte: Byte): Unit =
+    process(byte.toChar)
+
+  def calcChecksum(str: String): Int =
+    str.iterator.map(_.toByte).foldLeft(0)(_ ^ _) & 0xFF
 }

@@ -32,10 +32,10 @@ import javafx.stage.Stage
 import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.print3d._
-import com.colingodsey.stepd.CommandParser.SetPos
-import com.colingodsey.stepd.Parser.GCodeCommand
-import com.colingodsey.stepd.{CommandParser, LineSerial, Parser, SerialGCode}
-import com.colingodsey.stepd.planner.Math.{Accel, Jerk, Position}
+import com.colingodsey.stepd
+import com.colingodsey.stepd.GCode.{GCodeCommand, SetPos}
+import com.colingodsey.stepd._
+import com.colingodsey.stepd.Math._
 import com.colingodsey.stepd.planner._
 
 import scala.concurrent.Await
@@ -45,7 +45,7 @@ class UI extends Application {
   var t = 0.0
   var lastDeadline = Deadline.now
   var trapIdx = 0
-  var lastPos = Position.Zero
+  var lastPos = Vector4D.Zero
 
   val speedScale = 1.0
 
@@ -85,7 +85,7 @@ class UI extends Application {
     circle.setRadius(5)
   }
 
-  def render(pos: Position, dt: Double): Unit = {
+  def render(pos: Vector4D, dt: Double): Unit = {
     val v = (pos - lastPos).length / dt
     val c = ((v / 200.0) * (1024 + 256) / speedScale).toInt
     val r = math.min(c, 255)
@@ -101,18 +101,11 @@ class UI extends Application {
 }
 
 object UI extends App {
-  //val acc: Accel = Position(2000, 1500, 100, 10000) //current settings
-  //val jerk: Jerk = Position(15, 10, 0.4f, 5)
+  //val acc = Vector4D(2000, 1500, 100, 10000) //current settings
+  //val jerk = Vector4D(15, 10, 0.4f, 5)
 
-  val acc: Accel = Position(1500, 1000, 100, 10000)
-  val jerk: Jerk = Position(7, 5, 0.2, 2.5)
-
-  val stepSettings = new StepProcessor.StepSettings {
-    val perUnit: com.colingodsey.stepd.planner.Math.Accel = Position(80, 80, 1600, 95.2f)
-
-    //val ticksPerSecond: Double = 10000
-    val ticksPerSecond: Double = 10000
-  }
+  //val acc = Vector4D(1500, 1000, 100, 10000)
+  //val jerk = Vector4D(7, 5, 0.2, 2.5)
 
   val meshLeveling = {
     import MeshLeveling.Point
@@ -125,19 +118,21 @@ object UI extends App {
   val system = ActorSystem()
 
   val movement = system.actorOf(Props(classOf[MovementProcessor]), name="motion-ui")
-  val steps = system.actorOf(Props(classOf[StepProcessorActor], movement, stepSettings, meshLeveling.reader()), name="steps")
-  val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], steps, acc, jerk), name="physics")
+  val steps = system.actorOf(Props(classOf[StepProcessorActor], movement, ConfigMaker.plannerConfig, meshLeveling.reader()), name="steps")
+  val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
 
   /*val movement = system.actorOf(Props(classOf[MovementProcessorPos]), name="motion-ui")
   val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], movement, acc, jerk), name="physics")*/
 
   val delta = system.actorOf(Props(classOf[DeltaProcessorActor], physics, true), name="delta")
-  val commands = system.actorOf(Props(classOf[CommandStreamer], delta), name="commands")
 
-  val serial = system.actorOf(Props(classOf[LineSerial]), name="print-serial")
-  val gcodeSerial = system.actorOf(Props(classOf[SerialGCode], serial), name="gcode-serial")
+  //val serial = system.actorOf(Props(classOf[LineSerial]), name="print-serial")
+  //val gcodeSerial = system.actorOf(Props(classOf[SerialGCode], serial), name="gcode-serial")
 
   //val serialTest = system.actorOf(Props(classOf[SerialTest], gcodeSerial, serial), name="serial-test")
+
+  //val commands = system.actorOf(Props(classOf[CommandStreamer], delta), name="commands")
+  val proxy = system.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
 
   sys.addShutdownHook {
     system.terminate()
@@ -156,7 +151,7 @@ object UI extends App {
   }*/
 }
 
-class SerialTest(gcodeSerial: ActorRef, rawSerial: ActorRef) extends Actor with ActorLogging {
+/*class SerialTest(gcodeSerial: ActorRef, rawSerial: ActorRef) extends Actor with ActorLogging {
   import context.dispatcher
 
   val testCode = SerialGCode.Command("M105")
@@ -230,16 +225,15 @@ class SerialTest(gcodeSerial: ActorRef, rawSerial: ActorRef) extends Actor with 
   }
 
   object Report
-}
+}*/
 
 class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with CommandParser with ActorLogging {
   //val stream = getClass.getResourceAsStream("/g_test1.gcode")
-  val stream = getClass.getResourceAsStream("/hellbenchy.gcode")
+  //val stream = getClass.getResourceAsStream("/hellbenchy.gcode")
   //val stream = getClass.getResourceAsStream("/test2.gcode")
-  //val lines = scala.io.Source.fromInputStream(stream).getLines.mkString("\r\n")
+  val content = scala.io.Source.fromFile("hellbenchy.gcode").getLines.mkString("\r\n")
 
-  val content =
-    new Scanner(stream).useDelimiter("\\A").next() + "\r\n"
+  //val content =  new Scanner(stream).useDelimiter("\\A").next() + "\r\n"
 
   val chunkSize = 512
 
@@ -276,13 +270,14 @@ class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with Comm
 }
 
 object MovementProcessor {
-  var f: Double => Option[Position] = null
+  var f: Double => Option[Vector4D] = null
 }
 
 class MovementProcessor extends Actor with Stash with ActorLogging {
-  import Math._
+  import com.colingodsey.stepd.Math._
 
-  val stepsPer = UI.stepSettings.perUnit
+  val stepsPer = ConfigMaker.plannerConfig.stepsPerMM
+  val ticksPerSecond = ConfigMaker.plannerConfig.ticksPerSecond
 
   var ticks = 0.0
   var idx = 0
@@ -293,7 +288,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
   var z = 0L
   var e = 0L
 
-  @volatile var pos = Position.Zero
+  @volatile var pos = Vector4D.Zero
 
   MovementProcessor.f = getPos(_)
 
@@ -314,7 +309,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
     z += zRaw - 7
     e += eRaw - 7
 
-    pos = Position(x / stepsPer.x, y / stepsPer.y, z / stepsPer.z, e / stepsPer.e)
+    pos = Vector4D(x / stepsPer.x, y / stepsPer.y, z / stepsPer.z, e / stepsPer.e)
 
     //idx += 1
     idx += 8
@@ -327,10 +322,10 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
     }
   }
 
-  def getPos(dt: Double): Option[Position] = {
+  def getPos(dt: Double): Option[Vector4D] = {
     val x = pos
 
-    self ! Tick(dt * UI.stepSettings.ticksPerSecond / StepProcessor.StepsPerBlock)
+    self ! Tick(dt * ticksPerSecond / StepProcessor.StepsPerBlock)
 
     Some(x)
   }
@@ -373,14 +368,14 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
 }
 
 class MovementProcessorPos extends Actor with Stash with ActorLogging {
-  import Math._
+  import com.colingodsey.stepd.Math._
 
   var t = 0.0
   var trap: Trapezoid = null
 
   MovementProcessor.f = getPos(_)
 
-  def processTrap(dt: Double): Position = synchronized {
+  def processTrap(dt: Double): Vector4D = synchronized {
     val d = trap.getPos(t)
 
     val pos = trap.move.from + trap.move.d.normal * d

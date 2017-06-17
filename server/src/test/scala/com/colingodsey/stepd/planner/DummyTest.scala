@@ -17,7 +17,7 @@
 package com.colingodsey.stepd.planner
 
 import utest._
-import Math._
+import com.colingodsey.stepd.Math._
 
 object DummyTest extends TestSuite {
   import DeltaProcessor._
@@ -53,8 +53,8 @@ object DummyTest extends TestSuite {
 
     val phase = new PhysicsProcessor {
       //val acc: Accel = Position.One * 0.01f
-      val acc: Accel = Position(2000, 1500, 100, 10000)
-      val jerk: Jerk = Position(15, 10, 0.4f, 5)
+      val acc = Vector4D(2000, 1500, 100, 10000)
+      val jerk = Vector4D(15, 10, 0.4f, 5)
 
       var trap: Trapezoid = null
 
@@ -67,7 +67,7 @@ object DummyTest extends TestSuite {
     }
 
     val deltas = {
-      var lastPos: Position = Position.Zero
+      var lastPos: Vector4D = Vector4D.Zero
 
       moves map { move =>
         val d = MoveDelta(lastPos, move, move.f)
@@ -78,7 +78,7 @@ object DummyTest extends TestSuite {
       }
     }
 
-    def run(pointFunc: (Position, Double) => Unit): Unit = {
+    def run(pointFunc: (Vector4D, Double) => Unit): Unit = {
       var t = 0.0
 
       for(i <- 0 until deltas.length) {
@@ -105,8 +105,8 @@ object DummyTest extends TestSuite {
   val tests = this {
     'Traptest {
       val delta = MoveDelta(
-        Position(0, 0, 0, 0),
-        Position(10, 0, 0, 0),
+        Vector4D(0, 0, 0, 0),
+        Vector4D(10, 0, 0, 0),
         1
       )
 

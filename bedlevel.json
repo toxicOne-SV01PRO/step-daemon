@@ -1,4 +1,4 @@
-stepd.meshleveling.points: [{
+com.colingodsey.stepd.meshleveling.points: [{
   "x": 179,
   "y": 20,
   "offset": 0.135

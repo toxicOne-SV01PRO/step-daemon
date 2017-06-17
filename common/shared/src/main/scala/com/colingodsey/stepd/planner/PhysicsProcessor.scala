@@ -16,14 +16,12 @@
 
 package com.colingodsey.stepd.planner
 
-import Math._
-
-import scala.util.control.NoStackTrace
+import com.colingodsey.stepd.Math._
 
 /* takes move deltas, and produces iterable positions */
 trait PhysicsProcessor {
-  def acc: Accel
-  def jerk: Jerk
+  def acc: Vector4D
+  def jerk: Vector4D
 
   var lastDelta = MoveDelta.Empty
   var curDelta = MoveDelta.Empty
@@ -56,6 +54,22 @@ trait PhysicsProcessor {
   }
 
   //TODO: is there any way to do a resize that allows a start *deccel* instead of accel?
+
+  /*
+  Use the inner (dot) product of the 4d vectors to determine jerk, accel, and junction feed rate.
+
+  For the junction fr, the dot product of the 2 movement vectors is taken, and clamped to [0, 1].
+  The will produce a junction of 0 for any angles that are 90* or more.
+
+  Jerk is calculated by setting a floor based on the dot product of the change in velocity vectors,
+  if below this floor, the junction fr is 100% of the smaller of either fr (no accel).
+
+  Acceleration is calculated as the dot product of the movement vector (normalized absolute)
+  and the acceleration vector. Because both of these have positive-only values for each dimension,
+  the dot product produced is between 0 and acc.length. Should never be 0 for real values.
+
+  Invalid pre or post moves force a junction fr of 0.
+   */
   def processTrapezoid(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta): Unit = {
     val dvStart = moveDelta.v - pre.v
     val frMaxStart = math.min(moveDelta.f, pre.f)
@@ -79,7 +93,7 @@ trait PhysicsProcessor {
 
     val frDeccel = -frAccel
 
-    if(willStartFrCauseResize(frEnd, post)) throw LookaheadHalt
+    if(willStartFrCauseResize(frEnd, post)) throw LookaheadFault
 
     require(frAccel >= 0)
     require(frDeccel <= 0)
@@ -109,8 +123,8 @@ trait PhysicsProcessor {
       processTrapezoidSafe(lastDelta, curDelta, nextDelta)
       popDelta(nextDelta)
     } catch {
-      case LookaheadHalt =>
-        recordFault(LookaheadHalt)
+      case LookaheadFault =>
+        recordFault(LookaheadFault)
 
         require(nextDelta.f > 0.001, "unable to handle LookaheadHalt")
 

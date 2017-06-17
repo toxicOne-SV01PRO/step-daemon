@@ -18,10 +18,11 @@ package com.colingodsey.stepd
 
 import akka.actor._
 import akka.util.ByteString
-import com.colingodsey.stepd.Parser._
+import com.colingodsey.stepd.GCode._
 import com.colingodsey.stepd.planner._
+import com.colingodsey.stepd.serial.{LineSerial, SerialGCode}
 
-class ChunkManagerActor(lineSerial: ActorRef, gcodeSerial: ActorRef, maxChunks: Int) extends Actor with Stash with ActorLogging {
+class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor with Stash with ActorLogging {
   val maxGCodeQueue = 4
 
   var firstChunkIdx = -1
@@ -31,7 +32,7 @@ class ChunkManagerActor(lineSerial: ActorRef, gcodeSerial: ActorRef, maxChunks: 
 
   var pendingCommands = 0
 
-  lineSerial ! LineSerial.Subscribe
+  context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
 
   context become waitStart
 
@@ -75,10 +76,10 @@ class ChunkManagerActor(lineSerial: ActorRef, gcodeSerial: ActorRef, maxChunks: 
 
       log debug "busy"
 
-      //TODO: should consider an async wait cycle here so we're not just blasting away with data
+      //TODO: should consider an async wait cycle here if we can do it fast enough
       scala.concurrent.blocking(Thread.sleep(1))
 
-      lineSerial ! LineSerial.Bytes(lastChunk.chunk)
+      gcodeSerial ! LineSerial.Bytes(lastChunk.chunk)
     case LineSerial.Response(str) if str.startsWith("!ok") =>
       val idx = str.drop(4).trim.toInt
 
@@ -101,11 +102,11 @@ class ChunkManagerActor(lineSerial: ActorRef, gcodeSerial: ActorRef, maxChunks: 
 
       require(lastChunk != null && isPendingChunk)
 
-      lineSerial ! LineSerial.Bytes(lastChunk.chunk)
+      gcodeSerial ! LineSerial.Bytes(lastChunk.chunk)
     case LineSerial.Response(str) if str.startsWith("ok N") =>
       log.debug("ok: {}", str)
     case LineSerial.Response(str) =>
-      log.debug("recv: {}", str)
+      log.info("recv: {}", str)
 
     case _: ByteString if isPending =>
       stash()
@@ -115,7 +116,7 @@ class ChunkManagerActor(lineSerial: ActorRef, gcodeSerial: ActorRef, maxChunks: 
       log debug "send chunk"
 
       lastChunk = Chunk(rawChunk)
-      lineSerial ! LineSerial.Bytes(lastChunk.chunk)
+      gcodeSerial ! LineSerial.Bytes(lastChunk.chunk)
 
       isPendingChunk = true
       sent += 1

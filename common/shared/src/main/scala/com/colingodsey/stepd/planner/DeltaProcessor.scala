@@ -16,31 +16,33 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.CommandParser._
-import com.colingodsey.stepd.planner.Math._
-import com.colingodsey.stepd.Parser.GCodeCommand
+import com.colingodsey.stepd.GCode._
+import com.colingodsey.stepd.Math.Vector4D
 
 object DeltaProcessor {
   //absolute values
-  case class Move(x: Double, y: Double, z: Double, e: Double, f: Double) extends Position //feedrate per second
+  case class Move(x: Double, y: Double, z: Double, e: Double, f: Double) extends Vector4D //feedrate per second
 }
 
 //takes absolute positions and produces move deltas
 trait DeltaProcessor {
   import DeltaProcessor._
 
-  var pos = Position.Zero
-  var fr: Double = 0.0f //per minute!!
+  var pos = Vector4D.Zero
+  var fr: Double = 0.0
 
-  var frScale: Double = 1.0
+  def frScale: Double = 1.0
 
   def processMoveDelta(delta: MoveDelta): Unit
 
-  //TODO: adjust fr to account for internal fr, which uses E distance also?
   def processMove(move: Move): Unit = {
     val d = MoveDelta(pos, move, move.f)
 
     pos = move
+
+    //warm normal lazy val
+    d.d.normal
+    d.d.abs.normal
 
     processMoveDelta(d)
   }
@@ -59,7 +61,7 @@ trait DeltaProcessor {
   }
 
   def processSetPos(setPos: SetPos): Unit = {
-    pos = Position(
+    pos = Vector4D(
       setPos.x.getOrElse(pos.x),
       setPos.y.getOrElse(pos.y),
       setPos.z.getOrElse(pos.z),
