@@ -136,6 +136,7 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
     port
   }
 
+  //the exciting life of a proxy actor
   def receive = {
     case x: Serial.Bytes if sender == reader =>
       parent ! x

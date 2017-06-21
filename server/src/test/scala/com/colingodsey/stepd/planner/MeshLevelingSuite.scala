@@ -43,37 +43,6 @@ object MeshLevelingSuite extends TestSuite {
     points
   }
 
-  def produce4x4PNG(leveling: MeshLeveling): Unit = {
-    val points = test4x4Points
-    val minZ = points.map(_.offset).min.toFloat
-    val maxZ = points.map(_.offset).max.toFloat
-
-    val leveling = new MeshLeveling(points, 200, 200)
-    val img = new BufferedImage(2000, 2000, BufferedImage.TYPE_INT_RGB)
-
-    //val mesh = leveling.produce()
-    val reader = leveling.reader()
-
-    for {
-      x <- 0 until 2000
-      y <- 0 until 2000
-    } {
-      val z = reader.getOffset(x / 10.0, y / 10.0).toDouble
-
-      val z0 = (z - minZ) / (maxZ - minZ)
-      val totalSpace = 255 * 3
-      val z1 = z0 * totalSpace
-
-      val r = math.min(math.max(z1, 0), 255).toInt
-      val g = math.min(math.max(z1 - 255, 0), 255).toInt
-      val b = math.min(math.max(z1 - 255 * 2, 0), 255).toInt
-
-      img.setRGB(x, y, new Color(r - b, g, b).getRGB)
-    }
-
-    ImageIO.write(img, "PNG", new File("./meshleveling.png"));
-  }
-
   val tests = this {
     "img" - {
       val points = test4x4Points
@@ -81,18 +50,13 @@ object MeshLevelingSuite extends TestSuite {
 
       produce4x4PNG(leveling)
     }
+
     "4x4 points" - {
       val points = test4x4Points
       val minZ = points.map(_.offset).min.toFloat
       val maxZ = points.map(_.offset).max.toFloat
       val leveling = new MeshLeveling(points, 200, 200)
       val reader = leveling.reader()
-
-      println(points)
-      println(leveling.produce().toSeq)
-
-      println(reader.getOffset(10, 10))
-      println(reader.getOffset(10.5f, 10.5f))
 
       def checkZ(z0: Double): Unit = {
         //3 digits
@@ -128,5 +92,36 @@ object MeshLevelingSuite extends TestSuite {
         }
       }
     }
+  }
+
+  def produce4x4PNG(leveling: MeshLeveling): Unit = {
+    val points = test4x4Points
+    val minZ = points.map(_.offset).min.toFloat
+    val maxZ = points.map(_.offset).max.toFloat
+
+    val leveling = new MeshLeveling(points, 200, 200)
+    val img = new BufferedImage(2000, 2000, BufferedImage.TYPE_INT_RGB)
+
+    //val mesh = leveling.produce()
+    val reader = leveling.reader()
+
+    for {
+      x <- 0 until 2000
+      y <- 0 until 2000
+    } {
+      val z = reader.getOffset(x / 10.0, y / 10.0).toDouble
+
+      val z0 = (z - minZ) / (maxZ - minZ)
+      val totalSpace = 255 * 3
+      val z1 = z0 * totalSpace
+
+      val r = math.min(math.max(z1, 0), 255).toInt
+      val g = math.min(math.max(z1 - 255, 0), 255).toInt
+      val b = math.min(math.max(z1 - 255 * 2, 0), 255).toInt
+
+      img.setRGB(x, y, new Color(r - b, g, b).getRGB)
+    }
+
+    ImageIO.write(img, "PNG", new File("./meshleveling.png"))
   }
 }

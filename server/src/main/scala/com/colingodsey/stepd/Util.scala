@@ -14,23 +14,20 @@
  * limitations under the License.
  */
 
-package com.colingodsey.stepd.planner
+package com.colingodsey.stepd
 
-import com.colingodsey.stepd.Math.Vector4D
+import scala.concurrent.blocking
+import java.nio.file.{Paths, Files}
 
-case class PlannerConfig(
-    accel: Vector4D,
-    jerk: Vector4D,
-    stepsPerMM: Vector4D,
-    ticksPerSecond: Int
-)
+object Util {
+  def readFile(path: String): String = blocking {
+    val src = scala.io.Source.fromFile(path, "UTF8")
 
-case class DeviceConfig(
-    dev: String,
-    baud: Int
-)
+    try src.mkString finally src.close()
+  }
 
-case class MeshLevelingConfig(
-    bedMaxX: Int,
-    bedMaxY: Int
-)
+  def writeFile(path: String, content: String): Unit = blocking {
+    Files.write(Paths.get(path),
+      content.getBytes("UTF8"))
+  }
+}

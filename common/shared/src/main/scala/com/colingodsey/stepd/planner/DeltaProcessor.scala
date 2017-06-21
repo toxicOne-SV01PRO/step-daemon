@@ -22,6 +22,9 @@ import com.colingodsey.stepd.Math.Vector4D
 object DeltaProcessor {
   //absolute values
   case class Move(x: Double, y: Double, z: Double, e: Double, f: Double) extends Vector4D //feedrate per second
+
+  //sends the current cartesian point down the pipeline
+  case class SyncPos(pos: Vector4D)
 }
 
 //takes absolute positions and produces move deltas
@@ -29,13 +32,17 @@ trait DeltaProcessor {
   import DeltaProcessor._
 
   var pos = Vector4D.Zero
-  var fr: Double = 0.0
+  private var _fr: Double = 0.0
+
+  def fr = _fr
 
   def frScale: Double = 1.0
 
-  def processMoveDelta(delta: MoveDelta): Unit
+  def process(delta: MoveDelta): Unit
 
-  def processMove(move: Move): Unit = {
+  def process(x: SyncPos): Unit
+
+  def process(move: Move): Unit = {
     val d = MoveDelta(pos, move, move.f)
 
     pos = move
@@ -44,31 +51,30 @@ trait DeltaProcessor {
     d.d.normal
     d.d.abs.normal
 
-    processMoveDelta(d)
+    process(d)
+    process(SyncPos(pos))
   }
 
-  def processGMove(move: GMove): Unit = {
+  def process(move: GMove): Unit = {
     val x = move.x.getOrElse(pos.x)
     val y = move.y.getOrElse(pos.y)
     val z = move.z.getOrElse(pos.z)
     val e = move.e.getOrElse(pos.e)
     val f = move.f.getOrElse(fr)
 
-    fr = f
+    _fr = f
 
     if(move.isFrOnly) None
-    else processMove(Move(x, y, z, e, f / 60.0f * frScale))
+    else process(Move(x, y, z, e, f / 60.0f * frScale))
   }
 
-  def processSetPos(setPos: SetPos): Unit = {
+  def process(setPos: SetPos): Unit = {
     pos = Vector4D(
       setPos.x.getOrElse(pos.x),
       setPos.y.getOrElse(pos.y),
       setPos.z.getOrElse(pos.z),
       setPos.e.getOrElse(pos.e)
     )
+    process(SyncPos(pos))
   }
-
-  def getSetPos = SetPos(pos)
-
 }

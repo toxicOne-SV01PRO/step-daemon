@@ -22,6 +22,7 @@ import akka.actor._
 import Math._
 import com.colingodsey.stepd.GCode.GCodeCommand
 import com.colingodsey.stepd.planner._
+import com.colingodsey.stepd.serial.{LineSerial, SerialGCode}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._

@@ -28,7 +28,7 @@ trait PhysicsProcessor {
 
   def recordFault(fault: MathFault): Unit
 
-  def processTrapezoid(trap: Trapezoid): Unit
+  def process(trap: Trapezoid): Unit
 
   def maxResizes = 15
 
@@ -38,9 +38,9 @@ trait PhysicsProcessor {
   }
 
   def flush(): Unit = {
-    processDelta(MoveDelta.Empty)
-    processDelta(MoveDelta.Empty)
-    processDelta(MoveDelta.Empty)
+    process(MoveDelta.Empty)
+    process(MoveDelta.Empty)
+    process(MoveDelta.Empty)
   }
 
   def willStartFrCauseResize(startFr: Double, post: MoveDelta): Boolean = {
@@ -70,7 +70,7 @@ trait PhysicsProcessor {
 
   Invalid pre or post moves force a junction fr of 0.
    */
-  def processTrapezoid(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta): Unit = {
+  def createTrapezoid(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta): Unit = {
     val dvStart = moveDelta.v - pre.v
     val frMaxStart = math.min(moveDelta.f, pre.f)
     val frStart = if(pre.isValid) frMaxStart * {
@@ -100,27 +100,26 @@ trait PhysicsProcessor {
 
     val trap = Trapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd)
 
-    processTrapezoid(trap)
+    process(trap)
   }
 
-  def processTrapezoidSafe(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta, maxTimes: Int = maxResizes): Unit = {
+  def createTrapezoidSafe(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta, maxTimes: Int = maxResizes): Unit = {
     if(!moveDelta.isValid) return
 
-    try processTrapezoid(pre, moveDelta, post) catch {
+    try createTrapezoid(pre, moveDelta, post) catch {
       case x: EaseLimit if maxTimes == 0 =>
         sys.error("Failed reducing trapezoid for acceleration")
         recordFault(x)
       case x: EaseLimit =>
-        val newDelta = moveDelta.scaleFr(0.5)
-
         if(maxTimes == maxResizes) recordFault(x)
-        processTrapezoidSafe(pre, newDelta, post, maxTimes - 1)
+
+        createTrapezoidSafe(pre, moveDelta.scaleFr(0.5), post, maxTimes - 1)
     }
   }
 
-  def processDelta(nextDelta: MoveDelta): Unit = {
+  def process(nextDelta: MoveDelta): Unit = {
     try {
-      processTrapezoidSafe(lastDelta, curDelta, nextDelta)
+      createTrapezoidSafe(lastDelta, curDelta, nextDelta)
       popDelta(nextDelta)
     } catch {
       case LookaheadFault =>
@@ -128,7 +127,7 @@ trait PhysicsProcessor {
 
         require(nextDelta.f > 0.001, "unable to handle LookaheadHalt")
 
-        processDelta(nextDelta.scaleFr(0.5))
+        process(nextDelta.scaleFr(0.5))
     }
   }
 }

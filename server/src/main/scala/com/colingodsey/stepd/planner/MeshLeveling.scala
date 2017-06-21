@@ -20,9 +20,15 @@ import org.apache.commons.math3.analysis.interpolation.{BicubicInterpolator, Pie
 import json._
 
 object MeshLeveling {
+  object OutputLine {
+    def unapply(arg: String): Option[Point] = parseLine(arg)
+  }
+
   @accessor case class Point(x: Double, y: Double, offset: Double)
 
-  class Reader(data: Array[Float], val width: Int, val height: Int) extends MeshLevelingReader {
+  case class Reader(seqData: IndexedSeq[Float], width: Int, height: Int) extends MeshLevelingReader {
+    private val data = seqData.toArray
+
     def getOffset(x: Double, y: Double): Float = {
       val xi = x.toInt
       val yi = y.toInt
@@ -31,7 +37,7 @@ object MeshLeveling {
       val isLastY = yi + 1 >= height
 
       val q11 =
-        data(xi        +       yi * width)
+        data(   xi     +       yi * width)
 
       val q21 = if(isLastX) q11
       else data(xi + 1 +       yi * width)
@@ -76,7 +82,7 @@ object MeshLeveling {
 }
 
 //TODO: this *REALLY* needs to run a self test, especially with the flaky BicubicInterpolator
-class MeshLeveling(val points: Seq[MeshLeveling.Point], val width: Int, val height: Int) {
+case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val yMax: Int) {
   import MeshLeveling._
 
   val maxX = points.iterator.map(_.x).max
@@ -131,14 +137,14 @@ class MeshLeveling(val points: Seq[MeshLeveling.Point], val width: Int, val heig
   }
 
   def produce() = {
-    val out = new Array[Float](width * height)
+    val out = new Array[Float](xMax * yMax)
 
     for {
-      x <- 0 until width
-      y <- 0 until height
+      x <- 0 until xMax
+      y <- 0 until yMax
     } yield {
       val f = calculateFor(x, y)
-      val idx = x + y * width
+      val idx = x + y * xMax
 
       out(idx) = f.toFloat
     }
@@ -146,5 +152,5 @@ class MeshLeveling(val points: Seq[MeshLeveling.Point], val width: Int, val heig
     out
   }
 
-  def reader() = new Reader(produce(), width, height)
+  def reader() = Reader(produce(), xMax, yMax)
 }

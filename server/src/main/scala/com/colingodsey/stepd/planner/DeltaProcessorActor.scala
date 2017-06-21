@@ -32,53 +32,50 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
     case PipeSyncHandler.Done(newPos) =>
       pos = newPos
 
-      sendDown(getSetPos)
+      sendDown(SetPos(pos))
 
       unstashAll()
       context become receive
     case _ => stash()
   }
 
-  def checkPosTimer(): Unit = if(curTimer == None) {
-    curTimer = Some(context.system.scheduler.scheduleOnce(1.second, self, PosTimer))
-  }
-
   def receive: Receive = pipeline orElse {
-    case M114 if !ignoreM114 =>
+    case GetPos if !ignoreM114 =>
       //stop processing all other messages until we get a response from this
       ack()
-      sendDown(M114)
+      sendDown(GetPos)
       context become waitingM114
 
       log info "syncing pipeline position"
     case x: SetPos =>
       ack()
-      processSetPos(x)
+      process(x)
       //sendDown(getSetPos)
       sendDown(x)
     case x: GMove =>
       ack()
-      processGMove(x)
+      process(x)
     case x: GCodeCommand =>
       ack()
 
       //sendDown(getSetPos)
       sendDown(x)
-    case PosTimer =>
-      curTimer = None
-
-      sendDown(getSetPos)
   }
 
-  def processMoveDelta(delta: MoveDelta): Unit = {
+  def process(delta: MoveDelta): Unit = {
     sendDown(delta)
 
     deltasProcessed += 1
+  }
+
+  override def preStart(): Unit = {
+    super.preStart()
+    //checkPosTimer()
   }
 
   override def postStop(): Unit = {
     curTimer.foreach(_.cancel())
   }
 
-  object PosTimer
+  def process(x: DeltaProcessor.SyncPos): Unit = {}
 }

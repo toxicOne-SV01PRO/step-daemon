@@ -34,7 +34,7 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
     log.warning("fault: {}", fault.toString)
   }
 
-  def processTrapezoid(trap: Trapezoid): Unit = {
+  def process(trap: Trapezoid): Unit = {
     sendDown(trap)
   }
 
@@ -54,11 +54,11 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
       //TODO: this needed?
       ack()
       flush()
-      processDelta(delta)
+      process(delta)
       flush()
     case delta: MoveDelta =>
       ack()
-      processDelta(delta)
+      process(delta)
     case cmd: SetPos =>
       endTrapAndContinue(cmd)
     case cmd: GCodeCommand =>

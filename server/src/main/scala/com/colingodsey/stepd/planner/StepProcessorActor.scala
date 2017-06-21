@@ -21,12 +21,16 @@ import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.stepd.GCode._
 
-class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig, val leveling: MeshLeveling.Reader) extends StepProcessor with Pipeline {
+class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepProcessor with Pipeline {
   var splits = new Array[Int](4)
   var hasSentSpeed = false
 
   val ticksPerSecond = cfg.ticksPerSecond
   val stepsPerMM: Math.Vector4D = cfg.stepsPerMM
+
+  var leveling = MeshLevelingReader.Empty
+
+  context.system.eventStream.subscribe(self, classOf[MeshLeveling.Reader])
 
   def recordSplit(idx: Int): Unit = {
     splits(idx) = splits(idx) + 1
@@ -35,20 +39,20 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig, val leveling: M
   }
 
   //should move to chunk manager?
-  def processChunk(chunk: ByteString): Unit = {
+  def processChunk(chunk: Array[Byte]): Unit = {
     if(!hasSentSpeed) {
       hasSentSpeed = true
 
       sendDown(Raw("C0 S" + ticksPerSecond.toInt))
     }
 
-    sendDown(chunk)
+    sendDown(Chunk(chunk))
   }
 
   def receive: Receive = pipeline orElse {
     case trap: Trapezoid =>
       ack()
-      processTrap(trap)
+      process(trap)
     case x: SetPos =>
       ack()
       setPos(x)
@@ -60,5 +64,8 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig, val leveling: M
     case cmd: GCodeCommand =>
       ack()
       sendDown(cmd)
+
+    case x: MeshLeveling.Reader =>
+      leveling = x
   }
 }

@@ -19,7 +19,7 @@ package com.colingodsey.stepd
 import java.io.File
 
 import com.colingodsey.stepd.Math.Vector4D
-import com.colingodsey.stepd.planner.{DeviceConfig, PlannerConfig}
+import com.colingodsey.stepd.planner.{DeviceConfig, MeshLevelingConfig, PlannerConfig}
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.collection.JavaConversions._
@@ -31,6 +31,7 @@ object ConfigMaker {
   val stepd = config.getConfig("com.colingodsey.stepd")
   val planner = stepd.getConfig("planner")
   val device = stepd.getConfig("device")
+  val bed = stepd.getConfig("bed")
 
   def plannerConfig = {
     val accel = planner.getDoubleList("acceleration")
@@ -49,6 +50,13 @@ object ConfigMaker {
     DeviceConfig(
       dev = device.getString("dev"),
       baud = device.getInt("baud")
+    )
+  }
+
+  def levelingConfig = {
+    MeshLevelingConfig(
+      bedMaxX = bed.getInt("max-x"),
+      bedMaxY = bed.getInt("max-y")
     )
   }
 }

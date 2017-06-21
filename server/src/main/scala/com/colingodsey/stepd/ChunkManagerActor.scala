@@ -108,14 +108,14 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
     case LineSerial.Response(str) =>
       log.info("recv: {}", str)
 
-    case _: ByteString if isPending =>
+    case _: Chunk if isPending =>
       stash()
-    case rawChunk: ByteString =>
+    case chunk: Chunk =>
       sender ! Pipeline.Ack
 
       log debug "send chunk"
 
-      lastChunk = Chunk(rawChunk)
+      lastChunk = chunk
       gcodeSerial ! LineSerial.Bytes(lastChunk.chunk)
 
       isPendingChunk = true

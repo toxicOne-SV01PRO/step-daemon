@@ -107,18 +107,10 @@ object UI extends App {
   //val acc = Vector4D(1500, 1000, 100, 10000)
   //val jerk = Vector4D(7, 5, 0.2, 2.5)
 
-  val meshLeveling = {
-    import MeshLeveling.Point
-
-    val points = Seq(Point(179.0,20.0,0.135), Point(136.0,20.0,0.332), Point(93.0,20.0,0.317), Point(50.0,20.0,0.269), Point(50.0,65.0,0.17), Point(93.0,65.0,0.103), Point(136.0,65.0,0.041), Point(179.0,65.0,-0.159), Point(179.0,110.0,-0.263), Point(136.0,110.0,-0.031), Point(93.0,110.0,0.082), Point(50.0,110.0,0.191), Point(50.0,155.0,0.202), Point(93.0,155.0,0.111), Point(136.0,155.0,0.06), Point(179.0,155.0,-0.063))
-
-    new MeshLeveling(points, 200, 200)
-  }
-
   val system = ActorSystem()
 
   val movement = system.actorOf(Props(classOf[MovementProcessor]), name="motion-ui")
-  val steps = system.actorOf(Props(classOf[StepProcessorActor], movement, ConfigMaker.plannerConfig, meshLeveling.reader()), name="steps")
+  val steps = system.actorOf(Props(classOf[StepProcessorActor], movement, ConfigMaker.plannerConfig), name="steps")
   val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
 
   /*val movement = system.actorOf(Props(classOf[MovementProcessorPos]), name="motion-ui")
@@ -133,6 +125,8 @@ object UI extends App {
 
   //val commands = system.actorOf(Props(classOf[CommandStreamer], delta), name="commands")
   val proxy = system.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
+
+  val bedlevel = system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
 
   sys.addShutdownHook {
     system.terminate()
@@ -339,7 +333,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
   }
 
   def receive: Receive = {
-    case buff: ByteString if curChunk == null =>
+    case Chunk(buff: ByteString) if curChunk == null =>
       sender ! Pipeline.Ack
 
       curChunk = buff
@@ -349,7 +343,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
       ticks += x
 
       consumeBuffer()
-    case _: ByteString =>
+    case _: Chunk =>
       stash()
     case setPos: SetPos if curChunk == null =>
       x = (setPos.x.getOrElse(pos.x) * stepsPer.x).round

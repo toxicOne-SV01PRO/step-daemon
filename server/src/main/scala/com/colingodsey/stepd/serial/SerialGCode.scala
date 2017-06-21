@@ -23,13 +23,15 @@ object SerialGCode {
   case class Command(cmd: String)
   case class Completed(cmd: Command)
 
+  type Response = LineSerial.Response
+  val Response = LineSerial.Response
+
   val MaxQueue = 1
   val MaxIncr = 998
   val NumReset = "M110 N0"
 }
 
 class SerialGCode(devName: String, baud: Int) extends Actor with Stash with ActorLogging {
-  import LineSerial._
   import SerialGCode._
 
   var nIncr = 1

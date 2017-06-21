@@ -16,21 +16,26 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.Math.Vector4D
+import akka.util.ByteString
 
-case class PlannerConfig(
-    accel: Vector4D,
-    jerk: Vector4D,
-    stepsPerMM: Vector4D,
-    ticksPerSecond: Int
-)
+object Chunk {
+  val chunkHeader = ByteString.fromString("!")
+  val chunkFooter = ByteString.empty //ByteString.fromString("\r\n")
 
-case class DeviceConfig(
-    dev: String,
-    baud: Int
-)
+  def apply(bytes: Array[Byte]): Chunk =
+    Chunk(ByteString(bytes))
 
-case class MeshLevelingConfig(
-    bedMaxX: Int,
-    bedMaxY: Int
-)
+  def apply(bytes: Seq[Byte]): Chunk =
+    Chunk(ByteString(bytes: _*))
+}
+
+case class Chunk(rawBytes: ByteString) {
+  import Chunk._
+
+  require(rawBytes.length == StepProcessor.BytesPerChunk)
+
+  val check = rawBytes.foldLeft(0)(_ ^ _) & 0xFF
+  val chunk = chunkHeader ++ rawBytes ++ ByteString(check.toByte) ++ chunkFooter
+
+  def length = chunk.length
+}

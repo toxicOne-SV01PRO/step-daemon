@@ -19,6 +19,11 @@ package com.colingodsey.stepd
 import com.colingodsey.stepd.Math.Vector4D
 
 object GCode {
+  object GCodeCommand {
+    def unapply(arg: GCodeCommand): Option[String] =
+      Some(arg.raw.cmd)
+  }
+
   sealed trait GCodeCommand {
     def raw: Raw
     def isGCommand: Boolean
@@ -88,7 +93,7 @@ object GCode {
 
   case class SetPos(x: Option[Double], y: Option[Double], z: Option[Double], e: Option[Double])(val raw: Raw) extends GCommand
 
-  case object M114 extends MCommand {
+  case object GetPos extends MCommand {
     val raw = Raw("M114")
   }
 }

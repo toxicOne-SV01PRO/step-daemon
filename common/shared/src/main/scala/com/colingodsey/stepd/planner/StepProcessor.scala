@@ -16,7 +16,6 @@
 
 package com.colingodsey.stepd.planner
 
-import akka.util.ByteString
 import com.colingodsey.stepd.GCode.SetPos
 import com.colingodsey.stepd.Math.Vector4D
 
@@ -47,10 +46,8 @@ trait StepProcessor {
   var chunkIndex = 0
 
   //stats
-
   def recordSplit(axis: Int): Unit
-
-  def processChunk(chunk: ByteString): Unit
+  def processChunk(chunk: Array[Byte]): Unit
 
   def setPos(setPos: SetPos): Unit = {
     //TODO: if setting Z, should we reference the leveling offset?
@@ -71,10 +68,10 @@ trait StepProcessor {
 
     chunkIndex = 0
 
-    processChunk(ByteString fromArray currentChunk)
+    processChunk(currentChunk.clone())
   }
 
-  def addBlock(a: Byte, b: Byte): Unit = {
+  def addSegment(a: Byte, b: Byte): Unit = {
     currentChunk(chunkIndex) = a
     chunkIndex += 1
     currentChunk(chunkIndex) = b
@@ -83,7 +80,7 @@ trait StepProcessor {
     if(chunkIndex == BytesPerChunk) flushChunk()
   }
 
-  def processBlock(dx: Byte, dy: Byte, dz: Byte, de: Byte): Unit = {
+  def processSegment(dx: Byte, dy: Byte, dz: Byte, de: Byte): Unit = {
     var a, b: Int = 0
 
     a |= (dx + 7) << 4
@@ -91,7 +88,7 @@ trait StepProcessor {
     b |= (dz + 7) << 4
     b |= de + 7
 
-    addBlock(a.toByte, b.toByte)
+    addSegment(a.toByte, b.toByte)
   }
 
   def processMove(dx: Int, dy: Int, dz: Int, de: Int): Unit = {
@@ -116,11 +113,11 @@ trait StepProcessor {
       processMove(dxl, dyl, dzl, del)
       processMove(dxr, dyr, dzr, der)
     } else {
-      processBlock(dx.toByte, dy.toByte, dz.toByte, de.toByte)
+      processSegment(dx.toByte, dy.toByte, dz.toByte, de.toByte)
     }
   }
 
-  def processTrap(trap: Trapezoid): Unit = {
+  def process(trap: Trapezoid): Unit = {
     val iter = trap.posIterator(ticksPerSecond / StepsPerBlock)
 
     for(pos <- iter) {

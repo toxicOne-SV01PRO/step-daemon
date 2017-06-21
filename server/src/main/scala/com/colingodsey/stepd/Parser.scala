@@ -21,6 +21,7 @@ import com.colingodsey.stepd.GCode._
 trait CommandParser {
   def process(cmd: GCodeCommand): Unit
 
+  //TODO: the command modification should maybe be moved out of here
   def process(raw: Raw): Unit = {
     val out: GCodeCommand = raw.cmd match {
       case "G0" | "G1" => GMove(raw)
@@ -28,12 +29,12 @@ trait CommandParser {
       case "G28" =>
         //get position after homing
         process(raw: GCodeCommand)
-        M114
+        GetPos
       case "G29" =>
         //send the verbose version of the command
-        process(Raw("G29 V3 T"))
-        M114
-      case "M114" => M114
+        process(Raw("G29 V3 T"): GCodeCommand)
+        GetPos
+      case "M114" => GetPos
       case _ => raw
     }
 

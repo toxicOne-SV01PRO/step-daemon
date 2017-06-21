@@ -59,7 +59,7 @@ object DummyTest extends TestSuite {
       var trap: Trapezoid = null
 
 
-      def processTrapezoid(trap: Trapezoid): Unit = this.trap = trap
+      def process(trap: Trapezoid): Unit = this.trap = trap
 
       def recordLookaheadHalt(): Unit = {}
 
@@ -86,7 +86,7 @@ object DummyTest extends TestSuite {
         val preDelta = if(i == 0) delta else deltas(i - 1)
         val postDelta = if(i == (deltas.length - 1)) delta else deltas(i + 1)
 
-        phase.processTrapezoidSafe(preDelta, delta, postDelta, 5)
+        phase.createTrapezoidSafe(preDelta, delta, postDelta, 5)
 
         val trap = phase.trap
         var dt = 0.0
