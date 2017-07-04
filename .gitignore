@@ -8,3 +8,6 @@ target/
 
 state.json
 config.conf
+bedlevel.json
+
+meshleveling.png

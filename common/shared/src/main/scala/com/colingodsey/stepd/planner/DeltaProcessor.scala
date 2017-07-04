@@ -22,9 +22,6 @@ import com.colingodsey.stepd.Math.Vector4D
 object DeltaProcessor {
   //absolute values
   case class Move(x: Double, y: Double, z: Double, e: Double, f: Double) extends Vector4D //feedrate per second
-
-  //sends the current cartesian point down the pipeline
-  case class SyncPos(pos: Vector4D)
 }
 
 //takes absolute positions and produces move deltas
@@ -40,8 +37,6 @@ trait DeltaProcessor {
 
   def process(delta: MoveDelta): Unit
 
-  def process(x: SyncPos): Unit
-
   def process(move: Move): Unit = {
     val d = MoveDelta(pos, move, move.f)
 
@@ -52,7 +47,6 @@ trait DeltaProcessor {
     d.d.abs.normal
 
     process(d)
-    process(SyncPos(pos))
   }
 
   def process(move: GMove): Unit = {
@@ -75,6 +69,5 @@ trait DeltaProcessor {
       setPos.z.getOrElse(pos.z),
       setPos.e.getOrElse(pos.e)
     )
-    process(SyncPos(pos))
   }
 }

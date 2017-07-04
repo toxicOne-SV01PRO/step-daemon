@@ -19,23 +19,23 @@ package com.colingodsey.stepd
 import com.colingodsey.stepd.Math.Vector4D
 
 object GCode {
-  object GCodeCommand {
-    def unapply(arg: GCodeCommand): Option[String] =
+  object Command {
+    def unapply(arg: Command): Option[String] =
       Some(arg.raw.cmd)
   }
 
-  sealed trait GCodeCommand {
+  sealed trait Command {
     def raw: Raw
     def isGCommand: Boolean
   }
-  sealed trait MCommand extends GCodeCommand {
+  sealed trait MCommand extends Command {
     def isGCommand = false
   }
-  sealed trait GCommand extends GCodeCommand {
+  sealed trait GCommand extends Command {
     def isGCommand = true
   }
 
-  case class Raw(line: String) extends GCodeCommand {
+  case class Raw(line: String) extends Command {
     private val split = line.split(' ').toStream.filter(_.nonEmpty)
 
     val cmd = split.head
@@ -47,12 +47,14 @@ object GCode {
 
     def getPart(ident: Char): Option[String] =
       parts.filter(_.head == ident).headOption.map(_.tail)
+
+    def hasPart(ident: Char) = getPart(ident).isDefined
   }
 
-  case class CMove(chunkIdx: Int, nChunks: Int) extends GCodeCommand {
+  case class CMove(chunkIdx: Int, nChunks: Int) extends Command {
     val raw = Raw(s"C0 I$chunkIdx R$nChunks")
 
-    def isGCommand: Boolean = false
+    def isGCommand = false
   }
 
   object GMove {
@@ -95,5 +97,29 @@ object GCode {
 
   case object GetPos extends MCommand {
     val raw = Raw("M114")
+  }
+
+  case object ZProbe extends GCommand {
+    val raw = Raw("G29 V3 T")
+  }
+
+  object Home {
+    def apply(raw: Raw): Home =
+      Home(raw.hasPart('X'), raw.hasPart('Y'), raw.hasPart('Z'))
+  }
+
+  case class Home(homeX: Boolean, homeY: Boolean, homeZ: Boolean) extends GCommand {
+    val homeAll = homeX && homeY && homeZ
+
+    val raw = if(homeAll) Raw("G28") else Raw(homeSpecific)
+
+    def homeSpecific = {
+      val str = "G28 " +
+          (if(homeX) "X " else "") +
+          (if(homeY) "Y " else "") +
+          (if(homeZ) "Z " else "")
+
+      str.trim
+    }
   }
 }

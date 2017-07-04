@@ -18,31 +18,7 @@ package com.colingodsey.stepd
 
 import com.colingodsey.stepd.GCode._
 
-trait CommandParser {
-  def process(cmd: GCodeCommand): Unit
-
-  //TODO: the command modification should maybe be moved out of here
-  def process(raw: Raw): Unit = {
-    val out: GCodeCommand = raw.cmd match {
-      case "G0" | "G1" => GMove(raw)
-      case "G92" => SetPos(raw)
-      case "G28" =>
-        //get position after homing
-        process(raw: GCodeCommand)
-        GetPos
-      case "G29" =>
-        //send the verbose version of the command
-        process(Raw("G29 V3 T"): GCodeCommand)
-        GetPos
-      case "M114" => GetPos
-      case _ => raw
-    }
-
-    process(out)
-  }
-}
-
-trait Parser {
+trait LineParser {
   private val buffer = new Array[Char](1024)
   private var idx = 0
   private var lastN = 0
@@ -72,14 +48,15 @@ trait Parser {
 
   def process(char: Char): Unit = char match {
     case '\r' | '\n' if idx != 0 =>
-      val line = buffer.iterator.take(idx).mkString
+      val line = buffer.iterator.take(idx).mkString.trim
+
       idx = 0
 
       //remove comments
       line.indexOf(';') match {
         case -1 => process(line)
         case 0 => //ignore
-        case n => process(line.substring(0, n))
+        case n => process(line take n)
       }
     case '\r' | '\n' => //ignore if start of line
     case _ if idx == buffer.length =>

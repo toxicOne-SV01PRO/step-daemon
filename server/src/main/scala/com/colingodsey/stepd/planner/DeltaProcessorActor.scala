@@ -55,7 +55,7 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
     case x: GMove =>
       ack()
       process(x)
-    case x: GCodeCommand =>
+    case x: Command =>
       ack()
 
       //sendDown(getSetPos)
@@ -76,6 +76,4 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
   override def postStop(): Unit = {
     curTimer.foreach(_.cancel())
   }
-
-  def process(x: DeltaProcessor.SyncPos): Unit = {}
 }

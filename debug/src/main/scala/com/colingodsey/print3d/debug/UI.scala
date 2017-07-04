@@ -33,7 +33,7 @@ import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.print3d._
 import com.colingodsey.stepd
-import com.colingodsey.stepd.GCode.{GCodeCommand, SetPos}
+import com.colingodsey.stepd.GCode.{Command, SetPos}
 import com.colingodsey.stepd._
 import com.colingodsey.stepd.Math._
 import com.colingodsey.stepd.planner._
@@ -221,7 +221,7 @@ object UI extends App {
   object Report
 }*/
 
-class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with CommandParser with ActorLogging {
+class CommandStreamer(val next: ActorRef) extends Pipeline with LineParser with GCodeParser with ActorLogging {
   //val stream = getClass.getResourceAsStream("/g_test1.gcode")
   //val stream = getClass.getResourceAsStream("/hellbenchy.gcode")
   //val stream = getClass.getResourceAsStream("/test2.gcode")
@@ -235,7 +235,7 @@ class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with Comm
 
   self ! Process
 
-  def process(cmd: GCodeCommand): Unit = {
+  def processCommand(cmd: Command): Unit = {
     sendDown(cmd)
   }
 
@@ -267,7 +267,7 @@ object MovementProcessor {
   var f: Double => Option[Vector4D] = null
 }
 
-class MovementProcessor extends Actor with Stash with ActorLogging {
+class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline.Terminator {
   import com.colingodsey.stepd.Math._
 
   val stepsPer = ConfigMaker.plannerConfig.stepsPerMM
@@ -288,7 +288,6 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
 
   def takeStep(): Unit = {
     val blockIdx = (idx >> 3) << 1
-    val stepIdx = idx & 0x7
 
     val a = curChunk(blockIdx) & 0xFF
     val b = curChunk(blockIdx + 1) & 0xFF
@@ -319,7 +318,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
   def getPos(dt: Double): Option[Vector4D] = {
     val x = pos
 
-    self ! Tick(dt * ticksPerSecond / StepProcessor.StepsPerBlock)
+    self ! Tick(dt * ticksPerSecond / StepProcessor.StepsPerSegment)
 
     Some(x)
   }
@@ -334,7 +333,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
 
   def receive: Receive = {
     case Chunk(buff: ByteString) if curChunk == null =>
-      sender ! Pipeline.Ack
+      ack()
 
       curChunk = buff
 
@@ -351,11 +350,15 @@ class MovementProcessor extends Actor with Stash with ActorLogging {
       z = (setPos.z.getOrElse(pos.z) * stepsPer.z).round
       e = (setPos.e.getOrElse(pos.e) * stepsPer.e).round
 
-      sender ! Pipeline.Ack
+      ack()
     case setPos: SetPos =>
       stash()
-    case _: GCodeCommand =>
-      sender ! Pipeline.Ack
+
+    case syncPos: StepProcessor.SyncPos =>
+      ack()
+
+    case _: Command =>
+      ack()
   }
 
   case class Tick(ticks: Double)
@@ -406,7 +409,7 @@ class MovementProcessorPos extends Actor with Stash with ActorLogging {
       stash()
     case Unstash =>
       unstashAll()
-    case _: GCodeCommand =>
+    case _: Command =>
       sender ! Pipeline.Ack
   }
 

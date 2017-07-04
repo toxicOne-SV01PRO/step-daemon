@@ -17,11 +17,12 @@
 package com.colingodsey.stepd
 
 import akka.actor._
-import com.colingodsey.stepd.GCode.GCodeCommand
+import com.colingodsey.stepd.GCode.Command
 import com.colingodsey.stepd.planner.DeviceConfig
-import com.colingodsey.stepd.serial.Serial
+import com.colingodsey.stepd.serial.{LineSerial, Serial}
 
 import scala.util.Try
+import scala.concurrent.blocking
 
 object SocatProxy {
   val socatLine = "socat -d -d pty,raw,echo=0 pty,raw,echo=0"
@@ -31,7 +32,7 @@ object SocatProxy {
   val serverDevice = deviceBase
 }
 
-class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeline with Parser with CommandParser {
+class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeline with LineParser with GCodeParser {
   import SocatProxy._
   import scala.sys.process._
 
@@ -44,8 +45,10 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
   case class LineIn(str: String)
   case class PTY(dev: String)
 
-  def process(cmd: GCodeCommand): Unit = {
+  def processCommand(cmd: Command): Unit = {
     sendDown(cmd)
+
+    serialRef.get ! LineSerial.Bytes("ok\n")
   }
 
   def linkingDone(): Unit = {
@@ -58,12 +61,20 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
     serialRef = Some(ref)
 
+    ref ! LineSerial.Bytes("start\n")
+
     context become normal
   }
 
   def normal: Receive = {
     case Serial.Bytes(dat) =>
       dat foreach process
+
+    case LineSerial.Response(str) if str.startsWith("ok N") =>
+    case LineSerial.Response(str) if str.startsWith("!") =>
+    case LineSerial.Response(str) =>
+      serialRef.get ! LineSerial.Bytes(str)
+      serialRef.get ! LineSerial.Bytes("\n")
   }
 
   def linking: Receive = {
@@ -76,7 +87,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
       log.info("Linking {} to {}", dev, target)
 
-      s"ln -s $dev $target".!
+      blocking(s"ln -s $dev $target".!)
 
       if(nLinked == 2) linkingDone()
 
@@ -96,6 +107,12 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
     log.error(e.toString)
   }
 
+  override def preStart(): Unit = {
+    super.preStart()
+
+    context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
+  }
+
   override def onWake(): Unit = {
     serialRef.foreach(ref => ref ! Serial.ResumeRead)
     super.onWake()
@@ -106,7 +123,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
     super.onWait()
   }
 
-  override def postStop(): Unit = {
+  override def postStop(): Unit = blocking {
     super.postStop()
 
     Try(s"rm $clientDevice".!).failed foreach logErr

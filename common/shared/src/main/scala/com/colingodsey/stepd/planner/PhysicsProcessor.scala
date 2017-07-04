@@ -32,12 +32,12 @@ trait PhysicsProcessor {
 
   def maxResizes = 15
 
-  def popDelta(nextDelta: MoveDelta): Unit = {
+  def pushDelta(nextDelta: MoveDelta): Unit = {
     lastDelta = curDelta
     curDelta = nextDelta
   }
 
-  def flush(): Unit = {
+  def flushDelta(): Unit = {
     process(MoveDelta.Empty)
     process(MoveDelta.Empty)
     process(MoveDelta.Empty)
@@ -120,7 +120,7 @@ trait PhysicsProcessor {
   def process(nextDelta: MoveDelta): Unit = {
     try {
       createTrapezoidSafe(lastDelta, curDelta, nextDelta)
-      popDelta(nextDelta)
+      pushDelta(nextDelta)
     } catch {
       case LookaheadFault =>
         recordFault(LookaheadFault)

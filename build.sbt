@@ -20,4 +20,14 @@ lazy val debug = project.in(file("debug"))
     .settings(Build.jvmSettings: _*)
     .dependsOn(commonJVM, server)
 
+lazy val webPlayer = project.in(file("web-player"))
+    .settings(
+      name := "web-player",
+      scalaJSUseMainModuleInitializer := true
+    )
+    .settings(Build.commonSettings: _*)
+    .settings(Build.jsSettings: _*)
+    .enablePlugins(ScalaJSPlugin).settings(scalaJSStage in Global := FastOptStage)
+    .dependsOn(commonJS)
+
 Build.buildSettings

@@ -23,9 +23,13 @@ object Pipeline {
 
   val MaxPending = 32
   val MinPending = 16
+
+  trait Terminator { _: Actor =>
+    def ack(ref: ActorRef = sender): Unit = ref ! Ack
+  }
 }
 
-trait Pipeline extends Actor with Stash with ActorLogging {
+trait Pipeline extends Actor with Stash with ActorLogging with Pipeline.Terminator {
   import Pipeline._
 
   var pending = 0
@@ -43,8 +47,6 @@ trait Pipeline extends Actor with Stash with ActorLogging {
       onWait()
     }
   }
-
-  def ack(ref: ActorRef = sender): Unit = ref ! Ack
 
   def onWake(): Unit = {}
 

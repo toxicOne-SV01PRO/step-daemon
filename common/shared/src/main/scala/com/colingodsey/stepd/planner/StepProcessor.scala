@@ -21,11 +21,13 @@ import com.colingodsey.stepd.Math.Vector4D
 
 object StepProcessor {
   final val BytesPerChunk = 256
-  final val BytesPerBlock = 2
-  final val StepsPerBlock = 8 //actually 7, but we math it at 3 bits
+  final val BytesPerSegment = 2
+  final val StepsPerSegment = 8 //actually 7, but we math it at 3 bits
 
-  final val BlocksPerChunk = BytesPerChunk / BytesPerBlock
-  final val StepsPerChunk = BlocksPerChunk * StepsPerBlock
+  final val BlocksPerChunk = BytesPerChunk / BytesPerSegment
+  final val StepsPerChunk = BlocksPerChunk * StepsPerSegment
+
+  case class SyncPos(pos: Vector4D)
 }
 
 trait StepProcessor {
@@ -44,10 +46,12 @@ trait StepProcessor {
 
   var currentChunk = new Array[Byte](BytesPerChunk)
   var chunkIndex = 0
+  var lastPos = Vector4D.Zero
 
   //stats
   def recordSplit(axis: Int): Unit
   def processChunk(chunk: Array[Byte]): Unit
+  def process(syncPos: SyncPos): Unit
 
   def setPos(setPos: SetPos): Unit = {
     //TODO: if setting Z, should we reference the leveling offset?
@@ -69,6 +73,9 @@ trait StepProcessor {
     chunkIndex = 0
 
     processChunk(currentChunk.clone())
+
+    //sync real cartesian position after each trapezoid
+    process(SyncPos(lastPos))
   }
 
   def addSegment(a: Byte, b: Byte): Unit = {
@@ -92,23 +99,23 @@ trait StepProcessor {
   }
 
   def processMove(dx: Int, dy: Int, dz: Int, de: Int): Unit = {
-    if(math.abs(dx) >= StepsPerBlock || math.abs(dy) >= StepsPerBlock ||
-        math.abs(dz) >= StepsPerBlock || math.abs(de) >= StepsPerBlock) {
+    if(math.abs(dx) >= StepsPerSegment || math.abs(dy) >= StepsPerSegment ||
+        math.abs(dz) >= StepsPerSegment || math.abs(de) >= StepsPerSegment) {
       //we must break the delta into 2 moves
-      val dxl = dx / 2
-      val dyl = dy / 2
-      val dzl = dz / 2
-      val del = de / 2
+      val dxl = dx >> 1 //divide by 2
+      val dyl = dy >> 1
+      val dzl = dz >> 1
+      val del = de >> 1
 
       val dxr = dx - dxl
       val dyr = dy - dyl
       val dzr = dz - dzl
       val der = de - del
 
-      if(math.abs(dx) >= StepsPerBlock) recordSplit(0)
-      if(math.abs(dy) >= StepsPerBlock) recordSplit(1)
-      if(math.abs(dz) >= StepsPerBlock) recordSplit(2)
-      if(math.abs(de) >= StepsPerBlock) recordSplit(3)
+      if(math.abs(dx) >= StepsPerSegment) recordSplit(0)
+      if(math.abs(dy) >= StepsPerSegment) recordSplit(1)
+      if(math.abs(dz) >= StepsPerSegment) recordSplit(2)
+      if(math.abs(de) >= StepsPerSegment) recordSplit(3)
 
       processMove(dxl, dyl, dzl, del)
       processMove(dxr, dyr, dzr, der)
@@ -118,7 +125,7 @@ trait StepProcessor {
   }
 
   def process(trap: Trapezoid): Unit = {
-    val iter = trap.posIterator(ticksPerSecond / StepsPerBlock)
+    val iter = trap.posIterator(ticksPerSecond / StepsPerSegment)
 
     for(pos <- iter) {
       val zOffset = leveling.getOffset(pos.x, pos.y)
@@ -140,6 +147,8 @@ trait StepProcessor {
       stepPosY = stepPosYDest
       stepPosZ = stepPosZDest
       stepPosE = stepPosEDest
+
+      lastPos = pos
     }
   }
 }

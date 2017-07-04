@@ -19,9 +19,16 @@ package com.colingodsey.stepd.planner
 object MeshLevelingReader {
   val Empty = new MeshLevelingReader {
     def getOffset(x: Double, y: Double): Float = 0.0f
+
+    def maxZ = 0.0f
+
+    def minZ = 0.0f
   }
 }
 
 trait MeshLevelingReader {
   def getOffset(x: Double, y: Double): Float
+
+  def maxZ: Float
+  def minZ: Float
 }

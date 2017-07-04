@@ -16,9 +16,11 @@
 
 package com.colingodsey.stepd
 
+import com.colingodsey.logos.collections.Epsilon
+
 import scala.util.control.NoStackTrace
 
-object Math {
+object Math { mathSelf =>
   /*final val sqrtPi = math.sqrt(math.Pi)
   final val halfSqrtPi = sqrtPi / 2.0
   final val twoOverPi = 2.0 / math.Pi
@@ -50,16 +52,21 @@ object Math {
   }
 
   object Vector4D {
-    @inline def apply(x: Double, y: Double, z: Double, e: Double): Vector4D =
-      Raw(x, y, z, e)
+    @inline def apply(x: Double, y: Double, z: Double, e: Double): mathSelf.Vector4D =
+      new this.Vector4D(x, y, z, e)
 
-    def apply(seq: Int => Double): Vector4D =
-      Raw(seq(0), seq(1), seq(2), seq(3))
+    def apply(seq: Int => Double): mathSelf.Vector4D =
+      new this.Vector4D(seq(0), seq(1), seq(2), seq(3))
 
-    private final case class Raw(x: Double, y: Double, z: Double, e: Double) extends Vector4D
+    private final case class Vector4D(x: Double, y: Double, z: Double, e: Double) extends mathSelf.Vector4D
 
-    final val Zero: Vector4D = Raw(0, 0, 0, 0)
-    final val One: Vector4D = Raw(1, 1, 1, 1)
+    val X =     this(1, 0, 0, 0)
+    val Y =     this(0, 1, 0, 0)
+    val Z =     this(0, 0, 1, 0)
+    val E =     this(0, 0, 0, 1)
+    val Zero =  this(0, 0, 0, 0)
+    val One =   Zero + X + Y + Z + E
+    val Unit =  One.normal
   }
 
   trait Vector4D { self: Equals =>
@@ -68,31 +75,31 @@ object Math {
     def z: Double
     def e: Double
 
-    lazy val length =
-      math.sqrt(x * x + y * y + z * z + e * e)
+    lazy val length = math.sqrt(this * this)
 
     lazy val invLength = 1.0 / length
 
     lazy val normal =
-      if(length == 0) Vector4D.Zero
+      if(length == 0.0) Vector4D.Zero
+      else if(length == 1.0) this
       else this * invLength
 
     lazy val abs =
       Vector4D(math.abs(x),  math.abs(y),  math.abs(z),  math.abs(e))
 
-    def +(other: Vector4D) =
+    @inline final def +(other: Vector4D) =
       Vector4D(x + other.x,  y + other.y,  z + other.z,  e + other.e)
 
-    def -(other: Vector4D) =
+    @inline final def -(other: Vector4D) =
       Vector4D(x - other.x,  y - other.y,  z - other.z,  e - other.e)
 
-    def *(other: Vector4D): Double =
+    @inline final def *(other: Vector4D): Double =
                x * other.x + y * other.y + z * other.z + e * other.e
 
-    def *(scalar: Double): Vector4D =
+    @inline final def *(scalar: Double): Vector4D =
       Vector4D(x * scalar,   y * scalar,   z * scalar,   e * scalar)
 
-    def /(scalar: Double) = this * (1.0f / scalar)
+    @inline final def /(scalar: Double) = this * (1.0 / scalar)
 
     override def canEqual(that: Any): Boolean = that match {
       case _: Vector4D => true
@@ -113,5 +120,7 @@ object Math {
   case object PostEaseLimit extends EaseLimit
 
   case object LookaheadFault extends MathFault
+
+  implicit val stepDEpsilon = Epsilon(1e-6)
 }
 

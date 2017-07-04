@@ -22,7 +22,7 @@ import com.colingodsey.stepd.GCode._
 import com.colingodsey.stepd.planner._
 import com.colingodsey.stepd.serial.{LineSerial, SerialGCode}
 
-class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor with Stash with ActorLogging {
+class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor with Stash with ActorLogging with Pipeline.Terminator {
   val maxGCodeQueue = 4
 
   var firstChunkIdx = -1
@@ -49,7 +49,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
     sent = 0
   }
 
-  def sendGCodeCommand(cmd: GCodeCommand): Unit = {
+  def sendGCodeCommand(cmd: Command): Unit = {
     gcodeSerial ! SerialGCode.Command(cmd.raw.line)
 
     log.debug("send: {}", cmd.raw.line)
@@ -68,6 +68,10 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
       log.info("recv: {}", str)
     case _ =>
       stash()
+  }
+
+  def checkSendPosition(): Unit = {
+
   }
 
   def receive: Receive = {
@@ -111,7 +115,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
     case _: Chunk if isPending =>
       stash()
     case chunk: Chunk =>
-      sender ! Pipeline.Ack
+      ack()
 
       log debug "send chunk"
 
@@ -121,14 +125,17 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
       isPendingChunk = true
       sent += 1
 
-    case cmd: GCodeCommand if isPending =>
+    case cmd: Command if isPending =>
       stash()
-    case cmd: GCodeCommand =>
-      sender ! Pipeline.Ack
+    case cmd: Command =>
+      ack()
 
       flushChunks()
 
       sendGCodeCommand(cmd)
+
+    case syncPos: StepProcessor.SyncPos =>
+      ack()
 
     case SerialGCode.Completed(_) =>
       require(pendingCommands > 0, "more oks than sent commands!")

@@ -47,16 +47,14 @@ object Build {
     libraryDependencies in ThisBuild += compilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
   )
 
-  def akkaSettings = Seq(
-    libraryDependencies += "com.colingodsey" %%% "logos" % "0.8",
-    //libraryDependencies += "com.colingodsey" %%% "logos-akkajs" % "0.8",
-    libraryDependencies += "com.mediamath" %%% "scala-json" % "1.0"
-  )
-
-  def commonSettings = akkaSettings ++ Seq(
+  def commonSettings = Seq(
     test in assembly := {},
 
-    libraryDependencies += "com.lihaoyi" %%% "utest" % "0.4.7" % "test",
+    libraryDependencies +=  "com.colingodsey" %%% "logos" % "0.8",
+    //libraryDependencies += "com.colingodsey" %%% "logos-akkajs" %   "0.8",
+    libraryDependencies +=  "com.mediamath"   %%% "scala-json" % "1.0",
+
+    libraryDependencies +=  "com.lihaoyi"     %%% "utest" % "0.4.7" % "test",
 
     testFrameworks += new TestFramework("utest.runner.Framework")
   )
@@ -69,14 +67,16 @@ object Build {
     libraryDependencies += "org.apache.commons" % "commons-imaging" % "1.0-SNAPSHOT",
     libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6.1",
 
-    libraryDependencies += "org.scream3r" % "jssc" % "2.8.0"
+    libraryDependencies += "org.scream3r"       % "jssc" % "2.8.0"
   )
 
   def jsSettings = Seq(
     //libraryDependencies += "org.scala-js" %%% "scalajs-tools" % scalaJSVersion,
-    libraryDependencies += "com.colingodsey" %%% "logos-akkajs" % "0.8",
+    //libraryDependencies += "com.colingodsey" %%% "logos-akkajs" % "0.8",
 
-    libraryDependencies += "eu.unicredit" %%% "akkajsactor" % "0.1.3-SNAPSHOT",
+    //libraryDependencies += "eu.unicredit" %%% "akkajsactor" % "0.1.3-SNAPSHOT",
+
+    libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "0.9.2",
 
     skip in packageJSDependencies := false
   )

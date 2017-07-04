@@ -111,15 +111,29 @@ object MeshLevelingSuite extends TestSuite {
     } {
       val z = reader.getOffset(x / 10.0, y / 10.0).toDouble
 
-      val z0 = (z - minZ) / (maxZ - minZ)
+      val z0 = (z - reader.minZ) / (reader.maxZ - reader.minZ)
+      //val z0 = (z + 1.0) / 2.0
       val totalSpace = 255 * 3
       val z1 = z0 * totalSpace
+
+      require(z0 >= -0.00001f, z0.toString)
+      require(z0 <= 1.000001f, z0.toString)
 
       val r = math.min(math.max(z1, 0), 255).toInt
       val g = math.min(math.max(z1 - 255, 0), 255).toInt
       val b = math.min(math.max(z1 - 255 * 2, 0), 255).toInt
+      //val c = math.min(math.max(z0 * 255, 0), 255).toInt
 
-      img.setRGB(x, y, new Color(r - b, g, b).getRGB)
+      //val color = new Color(r - b, g, b).getRGB
+      val color = Color.getHSBColor(z0.toFloat, 1.0f, r / 255f).getRGB
+
+      img.setRGB(x, y, color)
+
+      //
+
+      /*val c = math.min(math.max(z0 * 255, 0), 255).toInt
+
+      img.setRGB(x, y, new Color(c, c, c).getRGB)*/
     }
 
     ImageIO.write(img, "PNG", new File("./meshleveling.png"))

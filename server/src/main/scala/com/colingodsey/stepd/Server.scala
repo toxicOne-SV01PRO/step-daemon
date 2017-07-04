@@ -20,7 +20,7 @@ import java.util.Scanner
 
 import akka.actor._
 import Math._
-import com.colingodsey.stepd.GCode.GCodeCommand
+import com.colingodsey.stepd.GCode.Command
 import com.colingodsey.stepd.planner._
 import com.colingodsey.stepd.serial.{LineSerial, SerialGCode}
 
@@ -68,7 +68,7 @@ object Server extends App {
   }
 }
 
-class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with CommandParser with ActorLogging {
+class CommandStreamer(val next: ActorRef) extends Pipeline with LineParser with GCodeParser with ActorLogging {
   //val content = scala.io.Source.fromFile("hellcube.gcode").getLines.mkString("\r\n")
   val content = scala.io.Source.fromFile("safecube.gcode").getLines.mkString("\r\n")
 
@@ -78,7 +78,7 @@ class CommandStreamer(val next: ActorRef) extends Pipeline with Parser with Comm
 
   self ! Process
 
-  def process(cmd: GCodeCommand): Unit = {
+  def processCommand(cmd: Command): Unit = {
     sendDown(cmd)
   }
 

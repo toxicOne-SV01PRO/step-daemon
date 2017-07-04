@@ -16,6 +16,7 @@
 
 package com.colingodsey.stepd.planner
 
+import com.colingodsey.logos.collections.{Epsilon, Vec2, Vec3}
 import org.apache.commons.math3.analysis.interpolation.{BicubicInterpolator, PiecewiseBicubicSplineInterpolator}
 import json._
 
@@ -24,10 +25,13 @@ object MeshLeveling {
     def unapply(arg: String): Option[Point] = parseLine(arg)
   }
 
-  @accessor case class Point(x: Double, y: Double, offset: Double)
+  @accessor case class Point(x: Double, y: Double, offset: Double) {
+    def vec = Vec3(x, y, offset)
+  }
 
-  case class Reader(seqData: IndexedSeq[Float], width: Int, height: Int) extends MeshLevelingReader {
-    private val data = seqData.toArray
+  class Reader(data: Array[Float], width: Int, height: Int) extends MeshLevelingReader {
+    val maxZ = data.max
+    val minZ = data.min
 
     def getOffset(x: Double, y: Double): Float = {
       val xi = x.toInt
@@ -85,17 +89,24 @@ object MeshLeveling {
 case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val yMax: Int) {
   import MeshLeveling._
 
-  val maxX = points.iterator.map(_.x).max
-  val minX = points.iterator.map(_.x).min
-  val maxY = points.iterator.map(_.y).max
-  val minY = points.iterator.map(_.y).min
+  val maxSampleX = points.iterator.map(_.x).max
+  val minSampleX = points.iterator.map(_.x).min
+  val maxSampleY = points.iterator.map(_.y).max
+  val minSampleY = points.iterator.map(_.y).min
+
+  val surfaceNormal = averageNormal
+
+  val sortX = (points.map(_.x) ++ Seq(0.0, xMax)).distinct.sorted.toIndexedSeq
+  val sortY = (points.map(_.y) ++ Seq(0.0, yMax)).distinct.sorted.toIndexedSeq
+
+  val pointMap = points.map(point => (point.x, point.y) -> point).toMap
+
+  println(surfaceNormal)
+
+  //TODO: produce std dev
+  val avgD = points.map(x => (x.vec * surfaceNormal)).sum / points.length.toDouble
 
   val function = {
-    val sortX = points.map(_.x).distinct.sorted.toIndexedSeq
-    val sortY = points.map(_.y).distinct.sorted.toIndexedSeq
-
-    val pointMap = points.map(point => (point.x, point.y) -> point).toMap
-
     val values = Array.fill(sortX.length)(new Array[Double](sortY.length))
 
     //must be a full mesh! every X point must have every corresponding Y point
@@ -105,8 +116,8 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
     } {
       val x = sortX(xi)
       val y = sortY(yi)
-      val point = pointMap.get(x, y).getOrElse(
-        sys.error(s"missing mesh leveling point ($x, $y)"))
+      val point = getSamplePoint(x, y)
+      //val point = createSamplePoint(x, y)
 
       values(xi)(yi) = point.offset
     }
@@ -124,25 +135,82 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
     }
   }
 
-  def calculateFor(x0: Double, y0: Double): Double = {
-    var x = x0
-    var y = y0
+  def getSamplePoint(x: Double, y: Double) = pointMap.get(x, y).getOrElse {
+    //point missing within mesh
+    if(x >= minSampleX && x <= maxSampleX && y >= minSampleY && y <= maxSampleY)
+      sys.error(s"missing mesh leveling point ($x, $y)")
 
-    if(x < minX) x = minX
-    if(x > maxX) x = maxX
-    if(y < minY) y = minY
-    if(y > maxY) y = maxY
-
-    function.value(x, y)
+    //otherwise create points outside the mesh
+    createSamplePoint(x, y)
   }
+
+  //extrapolate points using closest point plane
+  def createSamplePoint(x: Double, y: Double): Point = {
+    //solve using scalar equation of plane
+    val closest = getClosestPoint(x, y)
+
+    //solve for d and n using the closest point
+    //val n = calculateNormal(closest)
+    val n = surfaceNormal
+    val d = closest.vec * n
+
+    val z = (d - n.x * x - n.y * y) / n.z
+
+    Point(x, y, z)
+  }
+
+  def averageNormal = {
+    var accumN = Vec3.zero
+    var totalN = 0.0
+
+    for(a <- points.iterator) {
+      val n = calculateNormal(a)
+
+      accumN += n
+      totalN += 1.0
+    }
+
+    (accumN / totalN).normal
+  }
+
+  def calculateNormal(a: Point): Vec3 = {
+    val total = for {
+      b <- points
+      c <- points
+      //if all 3 unique
+      if Set(a, b, c).size == 3
+      //make sure its not colinear
+      dot = (b.vec - a.vec).normal * (c.vec - a.vec).normal
+      if math.abs(dot) < (1 - Epsilon.e)
+    } yield calculateNormal(a.vec, b.vec, c.vec)
+
+    (total.reduceLeft(_ + _) / total.length.toDouble).normal
+  }
+
+  def calculateNormal(a: Vec3, b: Vec3, c: Vec3): Vec3 = {
+    val norm0 = ((b - a) x (c - a)).normal
+    val norm = if(norm0.z > 0) norm0 else -norm0
+    val dist = a * norm
+
+    //sanity check. all points should be on plane
+    require(math.abs(b * norm - dist) < Epsilon.e)
+    require(math.abs(c * norm - dist) < Epsilon.e)
+
+    norm
+  }
+
+  def calculateFor(x: Double, y: Double): Double =
+    function.value(x, y)
+
+  def getClosestPoint(x: Double, y: Double): Point =
+    points.sortBy { point =>
+      math.sqrt(point.x * x + point.y * y)
+    }.head
 
   def produce() = {
     val out = new Array[Float](xMax * yMax)
 
-    for {
-      x <- 0 until xMax
-      y <- 0 until yMax
-    } yield {
+    for(x <- 0 until xMax; y <- 0 until yMax) {
       val f = calculateFor(x, y)
       val idx = x + y * xMax
 
@@ -152,5 +220,5 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
     out
   }
 
-  def reader() = Reader(produce(), xMax, yMax)
+  def reader() = new Reader(produce(), xMax, yMax)
 }

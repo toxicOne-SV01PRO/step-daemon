@@ -49,7 +49,15 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
     sendDown(Chunk(chunk))
   }
 
-  def receive: Receive = pipeline orElse {
+  def process(syncPos: StepProcessor.SyncPos): Unit =
+    sendDown(syncPos)
+
+  def waitLeveling: Receive = {
+    case x: MeshLeveling.Reader =>
+      leveling = x
+  }
+
+  def normal: Receive = pipeline orElse {
     case trap: Trapezoid =>
       ack()
       process(trap)
@@ -57,15 +65,15 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
       ack()
       setPos(x)
       sendDown(x)
-    case cmd: GCodeCommand if cmd.isGCommand =>
+    case cmd: Command if cmd.isGCommand =>
       ack()
       flushChunk()
       sendDown(cmd)
-    case cmd: GCodeCommand =>
+    case cmd: Command =>
       ack()
       sendDown(cmd)
-
-    case x: MeshLeveling.Reader =>
-      leveling = x
+    //TODO: ADD MESH LEVELING PAUSE
   }
+
+  def receive = normal
 }

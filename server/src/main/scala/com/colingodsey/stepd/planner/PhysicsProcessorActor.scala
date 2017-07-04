@@ -42,7 +42,7 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
     ack()
 
     //send an empty move so we can finish the pending trap, maintain linearization
-    flush()
+    flushDelta()
     sendDown(cmd)
   }
 
@@ -53,15 +53,15 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
     case delta: MoveDelta if delta.isEOrZOnly =>
       //TODO: this needed?
       ack()
-      flush()
+      flushDelta()
       process(delta)
-      flush()
+      flushDelta()
     case delta: MoveDelta =>
       ack()
       process(delta)
     case cmd: SetPos =>
       endTrapAndContinue(cmd)
-    case cmd: GCodeCommand =>
+    case cmd: Command =>
       endTrapAndContinue(cmd)
   }
 }
