@@ -57,6 +57,8 @@ object Serial {
 
       firstByte match {
         case null =>
+        case firstByte if available == 0 =>
+          context.parent ! Serial.Bytes(ByteString.empty ++ firstByte)
         case firstByte =>
           val out = blocking(port.readBytes(toRead)) match {
             case null => ByteString.empty ++ firstByte

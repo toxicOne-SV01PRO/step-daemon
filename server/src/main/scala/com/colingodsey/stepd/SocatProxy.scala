@@ -71,7 +71,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
       serialRef.get ! LineSerial.Bytes(s"ok N$n\n")
   }
 
-  def normal: Receive = {
+  def normal: Receive = pipeline orElse {
     case Serial.Bytes(dat) =>
       dat foreach process
 
@@ -84,7 +84,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
       serialRef.get ! LineSerial.Bytes("\n")
   }
 
-  def linking: Receive = {
+  def linking: Receive = pipeline orElse {
     case PTY(dev) if nLinked == 2 =>
       sys.error("this is... unexpected")
     case PTY(dev) =>
