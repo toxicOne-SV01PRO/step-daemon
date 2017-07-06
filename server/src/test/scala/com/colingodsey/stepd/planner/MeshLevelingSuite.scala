@@ -122,10 +122,12 @@ object MeshLevelingSuite extends TestSuite {
       val r = math.min(math.max(z1, 0), 255).toInt
       val g = math.min(math.max(z1 - 255, 0), 255).toInt
       val b = math.min(math.max(z1 - 255 * 2, 0), 255).toInt
-      //val c = math.min(math.max(z0 * 255, 0), 255).toInt
+      val c = math.min(math.max(z0 * 255, 0), 255).toInt
 
       //val color = new Color(r - b, g, b).getRGB
-      val color = Color.getHSBColor(z0.toFloat, 1.0f, r / 255f).getRGB
+      //val color = Color.getHSBColor(z0.toFloat, 1.0f, r / 255f).getRGB
+      val color = Color.getHSBColor(z0.toFloat, 1.0f, 1.0f).getRGB
+      //val color = new Color(c, c, c).getRGB
 
       img.setRGB(x, y, color)
 

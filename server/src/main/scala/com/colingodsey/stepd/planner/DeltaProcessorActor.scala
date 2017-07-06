@@ -19,6 +19,9 @@ package com.colingodsey.stepd.planner
 import com.colingodsey.stepd.Pipeline
 import com.colingodsey.stepd.GCode._
 import akka.actor._
+import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.serial.LineSerial
+
 import scala.concurrent.duration._
 
 class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends DeltaProcessor with Pipeline {
@@ -29,8 +32,18 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
 
   //TODO: maybe need a timeout here?
   def waitingM114: Receive = {
-    case PipeSyncHandler.Done(newPos) =>
-      pos = newPos
+    case LineSerial.Response(str) if str.startsWith("X:") && str.contains(" Count ") =>
+      //Recv: X:0.00 Y:0.00 Z:10.00 E:0.00 Count X:0 Y:0 Z:16000
+      val parts = str.trim.split(' ')
+
+      val x = parts(0).drop(2).toFloat
+      val y = parts(1).drop(2).toFloat
+      val z = parts(2).drop(2).toFloat
+      val e = parts(3).drop(2).toFloat
+
+      pos = Vector4D(x, y, z, e)
+
+      log.info("Synced new position from device: " + pos)
 
       sendDown(SetPos(pos))
 
@@ -71,6 +84,8 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
   override def preStart(): Unit = {
     super.preStart()
     //checkPosTimer()
+
+    context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
   }
 
   override def postStop(): Unit = {

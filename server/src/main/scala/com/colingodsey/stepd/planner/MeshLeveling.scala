@@ -101,8 +101,6 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
 
   val pointMap = points.map(point => (point.x, point.y) -> point).toMap
 
-  println(surfaceNormal)
-
   //TODO: produce std dev
   val avgD = points.map(x => (x.vec * surfaceNormal)).sum / points.length.toDouble
 
@@ -179,16 +177,25 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
       c <- points
       //if all 3 unique
       if Set(a, b, c).size == 3
-      //make sure its not colinear
-      dot = (b.vec - a.vec).normal * (c.vec - a.vec).normal
-      if math.abs(dot) < (1 - Epsilon.e)
-    } yield calculateNormal(a.vec, b.vec, c.vec)
+      norm <- calculateNormal(a.vec, b.vec, c.vec)
+    } yield norm
 
     (total.reduceLeft(_ + _) / total.length.toDouble).normal
   }
 
-  def calculateNormal(a: Vec3, b: Vec3, c: Vec3): Vec3 = {
-    val norm0 = ((b - a) x (c - a)).normal
+  def calculateNormal(a: Vec3, b: Vec3, c: Vec3): Option[Vec3] = {
+    val n2d1 = (b - a).to[Vec2]
+    val n2d2 = (c - a).to[Vec2]
+    val n1 = (b - a).normal
+    val n2 = (c - a).normal
+
+    //make sure its not colinear. work in 2d for this
+    if(math.abs(n2d1.normal * n2d2.normal) >= (1.0 - Epsilon.e)
+        || n2d1.length < Epsilon.e
+        || n2d2.length < Epsilon.e)
+      return None
+
+    val norm0 = (n1 x n2).normal
     val norm = if(norm0.z > 0) norm0 else -norm0
     val dist = a * norm
 
@@ -196,7 +203,7 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
     require(math.abs(b * norm - dist) < Epsilon.e)
     require(math.abs(c * norm - dist) < Epsilon.e)
 
-    norm
+    Some(norm)
   }
 
   def calculateFor(x: Double, y: Double): Double =

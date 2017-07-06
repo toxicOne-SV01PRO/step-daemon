@@ -47,8 +47,6 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
   def processCommand(cmd: Command): Unit = {
     sendDown(cmd)
-
-    serialRef.get ! LineSerial.Bytes("ok\n")
   }
 
   def linkingDone(): Unit = {
@@ -66,12 +64,21 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
     context become normal
   }
 
+  def sendOk(n: Option[Int]): Unit = n match {
+    case None =>
+      serialRef.get ! LineSerial.Bytes("ok\n")
+    case Some(n) =>
+      serialRef.get ! LineSerial.Bytes(s"ok N$n\n")
+  }
+
   def normal: Receive = {
     case Serial.Bytes(dat) =>
       dat foreach process
 
     case LineSerial.Response(str) if str.startsWith("ok N") =>
+    //case LineSerial.Response(str) if str.startsWith("ok ") =>
     case LineSerial.Response(str) if str.startsWith("!") =>
+      log.info(str)
     case LineSerial.Response(str) =>
       serialRef.get ! LineSerial.Bytes(str)
       serialRef.get ! LineSerial.Bytes("\n")

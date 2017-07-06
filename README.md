@@ -23,13 +23,13 @@ in hot spots where precision can be leveraged.
 ## Dependencies ##
 
 * **socat** is required for the virtual serial port (PTY).
- * MacOS (Homebrew): *brew install socat*
- * Linux: *sudo apt-get install socat*
- * Windows: must do a manual build with Cygwin
+  * MacOS (Homebrew): *brew install socat*
+  * Linux: *sudo apt-get install socat*
+  * Windows: must do a manual build with Cygwin
 * **Java JVM** for the desired machine.
- * MacOS: should be pre-installed
- * Raspbian: *sudo apt-get install oracle-java8-jdk*
- * Other Linux: Google around for java8 JDK installation instruction.
+  * MacOS: should be pre-installed
+  * Raspbian: *sudo apt-get install oracle-java8-jdk*
+  * Other Linux: Google around for java8 JDK installation instruction.
 * **SBT** should come pre-bundled with stepd.
 
 ## Usage ##
@@ -45,5 +45,5 @@ cat /tmp/pty-stepd-client &
 cat hellbenchy.gcode | tee /tmp/pty-stepd-client
 ```
 * Or connect OctoPrint directly to the server:
- * Add a custom serial port to OctoPrint for  */tmp/pty-stepd-client*.
- * Connect using any baud rate.
+  * Add a custom serial port to OctoPrint for  */tmp/pty-stepd-client*.
+  * Connect using any baud rate.

@@ -221,48 +221,6 @@ object UI extends App {
   object Report
 }*/
 
-class CommandStreamer(val next: ActorRef) extends Pipeline with LineParser with GCodeParser with ActorLogging {
-  //val stream = getClass.getResourceAsStream("/g_test1.gcode")
-  //val stream = getClass.getResourceAsStream("/hellbenchy.gcode")
-  //val stream = getClass.getResourceAsStream("/test2.gcode")
-  val content = scala.io.Source.fromFile("hellbenchy.gcode").getLines.mkString("\r\n")
-
-  //val content =  new Scanner(stream).useDelimiter("\\A").next() + "\r\n"
-
-  val chunkSize = 512
-
-  var itr = content.iterator
-
-  self ! Process
-
-  def processCommand(cmd: Command): Unit = {
-    sendDown(cmd)
-  }
-
-  def sendSome(): Unit = {
-    for(_ <- 0 until chunkSize) {
-      if(!itr.hasNext) {
-        //log.info("restarting...")
-        itr = content.iterator
-      }
-
-      process(itr.next())
-    }
-
-  }
-
-  def receive: Receive = pipeline orElse {
-    case Process =>
-      sendSome()
-
-      //log.info("some")
-
-      self ! Process
-  }
-
-  object Process
-}
-
 object MovementProcessor {
   var f: Double => Option[Vector4D] = null
 }

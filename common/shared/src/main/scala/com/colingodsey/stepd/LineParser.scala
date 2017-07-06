@@ -25,8 +25,10 @@ trait LineParser {
 
   def process(cmd: Raw): Unit
 
+  def sendOk(n: Option[Int]): Unit
+
   def process(line: String): Unit = if(line.trim.nonEmpty) {
-    val cmd = line.indexOf('*') match {
+    val cmd0 = line.indexOf('*') match {
       case -1 => line
       case idx =>
         val cmd = line.substring(0, idx)
@@ -37,13 +39,23 @@ trait LineParser {
 
         cmd
     }
+    val cmd = cmd0.trim
 
-    val raw = Raw(cmd.trim)
+    if(cmd startsWith "N") {
+      val idx = cmd.indexOf(' ')
+      val n = cmd.drop(1).take(idx).trim.toInt
 
-    //set n if exists
-    raw.getPart('N').map(_.toInt).foreach(lastN = _)
+      lastN = n
 
-    process(raw)
+      process(Raw(cmd.drop(idx + 1)))
+      sendOk(Some(n))
+    } else {
+      val raw = Raw(cmd)
+
+      process(raw)
+
+      if(raw.cmd != "M105") sendOk(None)
+    }
   }
 
   def process(char: Char): Unit = char match {

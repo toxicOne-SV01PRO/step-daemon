@@ -70,15 +70,11 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
       stash()
   }
 
-  def checkSendPosition(): Unit = {
-
-  }
-
   def receive: Receive = {
     case LineSerial.Response(str) if str.startsWith("!busy") =>
       require(lastChunk != null && isPendingChunk)
 
-      log debug "busy"
+      log info "busy resend"
 
       //TODO: should consider an async wait cycle here if we can do it fast enough
       scala.concurrent.blocking(Thread.sleep(1))
@@ -100,7 +96,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
       else
         unstashAll()
 
-      log debug "chunk ok"
+      log info "chunk ok"
     case LineSerial.Response(str) if str.startsWith("!fail") =>
       log.error("chunk fail {}", str)
 
@@ -117,7 +113,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxChunks: Int) extends Actor wit
     case chunk: Chunk =>
       ack()
 
-      log debug "send chunk"
+      log info "send chunk"
 
       lastChunk = chunk
       gcodeSerial ! LineSerial.Bytes(lastChunk.chunk)

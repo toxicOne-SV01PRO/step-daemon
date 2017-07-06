@@ -53,7 +53,7 @@ object Serial {
       }
 
       val available = port.getInputBufferBytesCount
-      val toRead = math.max(math.min(available, 1024), 1)
+      val toRead = math.min(available, 1024)
 
       firstByte match {
         case null =>

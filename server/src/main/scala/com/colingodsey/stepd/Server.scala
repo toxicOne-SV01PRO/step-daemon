@@ -46,18 +46,19 @@ object Server extends App {
 
   val system = ActorSystem("stepd", ConfigMaker.config)
 
-  val serial = system.actorOf(Props(classOf[LineSerial]), name="print-serial")
-  val gcodeSerial = system.actorOf(Props(classOf[SerialGCode], serial), name="gcode-serial")
+  val gcodeSerial = system.actorOf(Props(classOf[SerialGCode], ConfigMaker.deviceConfig), name="gcode-serial")
 
-  val chunkManager = system.actorOf(Props(classOf[ChunkManagerActor], serial, 5), name="chunk-manager")
+  val chunkManager = system.actorOf(Props(classOf[ChunkManagerActor], gcodeSerial, 5), name="chunk-manager")
 
-  val steps = system.actorOf(Props(classOf[StepProcessorActor], chunkManager, ConfigMaker.plannerConfig, meshLeveling.reader()), name="steps")
+  val steps = system.actorOf(Props(classOf[StepProcessorActor], chunkManager, ConfigMaker.plannerConfig), name="steps")
+
   val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
 
   val delta = system.actorOf(Props(classOf[DeltaProcessorActor], physics, false), name="delta")
-  val commands = system.actorOf(Props(classOf[CommandStreamer], delta), name="commands")
 
-  val m114Handler = system.actorOf(Props(classOf[PipeSyncHandler], delta, serial), name="m114-handler")
+  val proxy = system.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
+
+  val bedlevel = system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
 
   //system.scheduler.schedule(15.seconds, 10.seconds, gcodeSerial, SerialGCode.Command("M114"))
 
@@ -66,50 +67,4 @@ object Server extends App {
 
     Await.result(system.whenTerminated, 10.seconds)
   }
-}
-
-class CommandStreamer(val next: ActorRef) extends Pipeline with LineParser with GCodeParser with ActorLogging {
-  //val content = scala.io.Source.fromFile("hellcube.gcode").getLines.mkString("\r\n")
-  val content = scala.io.Source.fromFile("safecube.gcode").getLines.mkString("\r\n")
-
-  val chunkSize = 512
-
-  var itr = content.iterator
-
-  self ! Process
-
-  def processCommand(cmd: Command): Unit = {
-    sendDown(cmd)
-  }
-
-  def sendSome(): Boolean = {
-    /*for(_ <- 0 until chunkSize) {
-      if(!itr.hasNext) {
-        log.info("restarting...")
-        itr = content.iterator
-      }
-
-      process(itr.next())
-    }*/
-
-    for(_ <- 0 until chunkSize) {
-      if(!itr.hasNext) {
-        log.info("done.")
-        //itr = content.iterator
-      }
-
-      if(itr.hasNext)
-        process(itr.next())
-    }
-
-    itr.hasNext
-  }
-
-  def receive: Receive = pipeline orElse {
-    case Process =>
-      if(sendSome())
-        self ! Process
-  }
-
-  object Process
 }

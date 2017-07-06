@@ -26,7 +26,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   var hasSentSpeed = false
 
   val ticksPerSecond = cfg.ticksPerSecond
-  val stepsPerMM: Math.Vector4D = cfg.stepsPerMM
+  val stepsPerMM = cfg.stepsPerMM
 
   var leveling = MeshLevelingReader.Empty
 
@@ -35,7 +35,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   def recordSplit(idx: Int): Unit = {
     splits(idx) = splits(idx) + 1
 
-    log.debug("split")
+    log debug "split"
   }
 
   //should move to chunk manager?
@@ -43,6 +43,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
     if(!hasSentSpeed) {
       hasSentSpeed = true
 
+      //sendDown(Raw("C0 S" + ticksPerSecond.toInt))
       sendDown(Raw("C0 S" + ticksPerSecond.toInt))
     }
 
@@ -55,6 +56,10 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   def waitLeveling: Receive = {
     case x: MeshLeveling.Reader =>
       leveling = x
+      unstashAll()
+
+      log info "got mesh leveling data"
+    case _ => stash()
   }
 
   def normal: Receive = pipeline orElse {
@@ -65,6 +70,13 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
       ack()
       setPos(x)
       sendDown(x)
+    case ZProbe =>
+      ack()
+      flushChunk()
+      sendDown(ZProbe)
+
+      log info "waiting for leveling data"
+      context become waitLeveling
     case cmd: Command if cmd.isGCommand =>
       ack()
       flushChunk()
@@ -72,7 +84,6 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
     case cmd: Command =>
       ack()
       sendDown(cmd)
-    //TODO: ADD MESH LEVELING PAUSE
   }
 
   def receive = normal

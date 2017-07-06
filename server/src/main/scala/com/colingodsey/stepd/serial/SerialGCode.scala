@@ -18,6 +18,7 @@ package com.colingodsey.stepd.serial
 
 import akka.actor._
 import akka.util.ByteString
+import com.colingodsey.stepd.planner.DeviceConfig
 
 object SerialGCode {
   case class Command(cmd: String)
@@ -31,7 +32,7 @@ object SerialGCode {
   val NumReset = "M110 N0"
 }
 
-class SerialGCode(devName: String, baud: Int) extends Actor with Stash with ActorLogging {
+class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging {
   import SerialGCode._
 
   var nIncr = 1
@@ -39,7 +40,7 @@ class SerialGCode(devName: String, baud: Int) extends Actor with Stash with Acto
   var lastMsgAndSender: Option[(ActorRef, Command)] = None
 
   val lineSerial: ActorRef = context.actorOf(
-    Props(classOf[LineSerial], devName, baud),
+    Props(classOf[LineSerial], cfg),
     name = "line-serial")
 
   override def preStart(): Unit = {
@@ -81,7 +82,14 @@ class SerialGCode(devName: String, baud: Int) extends Actor with Stash with Acto
       waitOk += 1
 
       context.system.eventStream.publish(cmd)
-    case Response(str) if str.startsWith("ok N") =>
+
+    case x: LineSerial.Bytes =>
+      lineSerial ! x
+
+    case x: Serial.FlowCommand =>
+      lineSerial ! x
+
+    case a @ Response(str) if str.startsWith("ok N") || str.startsWith("ok T") =>
       waitOk -= 1
       unstashAll()
 
@@ -102,11 +110,15 @@ class SerialGCode(devName: String, baud: Int) extends Actor with Stash with Acto
         log.warning("Received more OKs than commands sent")
         waitOk = 0
       }
+
+      //goofy M105 response
+      if(str.startsWith("ok T"))
+        context.system.eventStream.publish(a)
     case Response(str) if str.startsWith("ok N") =>
       log.warning("Got an ok for no reason: {}", str)
     case Response(str) if str.startsWith("ok") =>
       log.warning("Random ok with no N value: {}", str)
-    case a: Response if sender == lineSerial =>
+    case a: Response =>
       //any other text line we broadcast out to our subscribers
       context.system.eventStream.publish(a)
   }

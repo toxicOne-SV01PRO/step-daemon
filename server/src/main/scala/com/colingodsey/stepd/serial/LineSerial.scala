@@ -17,6 +17,7 @@
 package com.colingodsey.stepd.serial
 
 import akka.actor._
+import com.colingodsey.stepd.planner.DeviceConfig
 
 object LineSerial {
   case class Response(str: String)
@@ -25,20 +26,20 @@ object LineSerial {
   val Bytes = Serial.Bytes
 }
 
-class LineSerial(devName: String, baud: Int) extends Actor with ActorLogging with Stash {
+class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
   import LineSerial._
 
   log.info("starting...")
 
   val serial = context.actorOf(
-    Props(classOf[Serial], devName, baud),
+    Props(classOf[Serial], cfg),
     name = "serial")
 
   val dataBuffer = new Array[Byte](1024)
   var bufferIdx = 0
 
   def processStr(str: String): Unit = {
-    log.debug("recv: {}", str)
+    log.info("recv: {}", str)
 
     context.parent ! Response(str)
   }

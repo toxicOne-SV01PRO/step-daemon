@@ -41,6 +41,8 @@ object ParserTest extends TestSuite {
           //println(cmd)
           outCmds += cmd
         }
+
+        def sendOk(n: Option[Int]): Unit = {}
       }
 
       testGCode foreach testParser.process
