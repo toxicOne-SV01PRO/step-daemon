@@ -10,7 +10,7 @@ already have: a Marlin compatible control board, a Raspberry Pi, and a USB cable
 
 Step Daemon utilizes mostly 64-bit double precision linear algebra and vector 
 math from top to bottom, with some 32-bit single precision floating point used 
-in hot spots where precision can be leveraged.
+in hot spots where precision can be leveraged safely.
 
 * Low RAM: a bit less than 200mb.
 * Low CPU: runs at about 5-10% CPU on a Raspberry Pi 3.
@@ -32,6 +32,20 @@ in hot spots where precision can be leveraged.
   * Other Linux: Google around for java8 JDK installation instruction.
 * **SBT** should come pre-bundled with stepd.
 
+## Marlin Configuration ##
+* Only XYZ cartesian builds currently supported (no core or delta support yet).
+* Baud rate of 250kbps or 500kbps suggested for 16MHz devices.
+* Enable *CHUNK_SUPPORT*.
+* (Optional) Enable *AUTO_BED_LEVELING_BILINEAR* for bed leveling
+  * Bilinear is the only supported mode currently.
+  * Must be at least 3x3 sample points.
+  * Bed leveling results are retained locally as *bedlevel.json*.
+
+## Configuration ##
+* Copy example config from *config.conf.example* to *config.conf*.
+* Modify config settings as needed. Units are in mm.
+* Baud rate should match value configured in Marlin.
+
 ## Usage ##
 
 * Build and run the server (from the base directory of the checkout):
@@ -40,16 +54,11 @@ in hot spots where precision can be leveraged.
 java -jar server/target/scala-2.11/*.jar
 ```
 * Pipe a gcode file directly to the server:
-```bash
+```bash 
 cat /tmp/pty-stepd-client &
 cat hellbenchy.gcode | tee /tmp/pty-stepd-client
 ```
-* Or connect OctoPrint directly to the server:
+* Or connect OctoPrint directly to the server.
   * Add a custom serial port to OctoPrint for  */tmp/pty-stepd-client*.
   * Restart OctoPrint if port does not show in the list (make sure stepd is running).
   * Connect using *auto* baud rate (must be auto).
-
-## Marlin Configuration ##
-* Only XYZ builds currently supported (no core or delta support yet).
-* Enable *CHUNK_SUPPORT*.
-* (Optional) Enable *AUTO_BED_LEVELING_BILINEAR* for bed leveling (only supported mode currently).

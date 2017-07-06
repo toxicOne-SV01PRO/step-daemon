@@ -28,21 +28,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 
 object Server extends App {
-
-  //val acc: Accel = Position(2000, 1500, 100, 10000) //current settings
-  //val jerk: Jerk = Position(15, 10, 0.4f, 5)
-
-  //val acc = Vector4D(1500, 1000, 100, 10000) //new ideal settings
-  //val acc = Vector4D(1000, 700, 100, 10000) //new ideal settings
-  //val jerk = Vector4D(7, 5, 0.2, 2.5)
-
-  val meshLeveling = {
-    import MeshLeveling.Point
-
-    val points = Seq(Point(179.0,20.0,0.135), Point(136.0,20.0,0.332), Point(93.0,20.0,0.317), Point(50.0,20.0,0.269), Point(50.0,65.0,0.17), Point(93.0,65.0,0.103), Point(136.0,65.0,0.041), Point(179.0,65.0,-0.159), Point(179.0,110.0,-0.263), Point(136.0,110.0,-0.031), Point(93.0,110.0,0.082), Point(50.0,110.0,0.191), Point(50.0,155.0,0.202), Point(93.0,155.0,0.111), Point(136.0,155.0,0.06), Point(179.0,155.0,-0.063))
-
-    new MeshLeveling(points, 200, 200)
-  }
+  //prevent AWT from opening a window
+  System.setProperty("java.awt.headless", "true")
 
   val system = ActorSystem("stepd", ConfigMaker.config)
 
@@ -59,8 +46,6 @@ object Server extends App {
   val proxy = system.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
 
   val bedlevel = system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
-
-  //system.scheduler.schedule(15.seconds, 10.seconds, gcodeSerial, SerialGCode.Command("M114"))
 
   sys.addShutdownHook {
     system.terminate()
