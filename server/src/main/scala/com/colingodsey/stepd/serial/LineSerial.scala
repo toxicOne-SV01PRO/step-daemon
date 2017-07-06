@@ -39,7 +39,7 @@ class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
   var bufferIdx = 0
 
   def processStr(str: String): Unit = {
-    log.info("recv: {}", str)
+    log.debug("recv: {}", str)
 
     context.parent ! Response(str)
   }

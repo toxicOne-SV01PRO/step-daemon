@@ -95,6 +95,18 @@ object GCode {
 
   case class SetPos(x: Option[Double], y: Option[Double], z: Option[Double], e: Option[Double])(val raw: Raw) extends GCommand
 
+  object SetMaxAcceleration {
+    def apply(raw: Raw): SetMaxAcceleration =
+      SetMaxAcceleration(
+        raw.getPart('X').map(_.toDouble),
+        raw.getPart('Y').map(_.toDouble),
+        raw.getPart('Z').map(_.toDouble),
+        raw.getPart('E').map(_.toDouble)
+      )(raw)
+  }
+
+  case class SetMaxAcceleration(x: Option[Double], y: Option[Double], z: Option[Double], e: Option[Double])(val raw: Raw) extends GCommand
+
   case object GetPos extends MCommand {
     val raw = Raw("M114")
   }
@@ -103,9 +115,19 @@ object GCode {
     val raw = Raw("G29 V3 T")
   }
 
+  case object SetAbsolute extends GCommand {
+    val raw = Raw("G90")
+  }
+
+  case object SetRelative extends GCommand {
+    val raw = Raw("G91")
+  }
+
   object Home {
     def apply(raw: Raw): Home =
       Home(raw.hasPart('X'), raw.hasPart('Y'), raw.hasPart('Z'))
+
+    val All = Home(true, true, true)
   }
 
   case class Home(homeX: Boolean, homeY: Boolean, homeZ: Boolean) extends GCommand {

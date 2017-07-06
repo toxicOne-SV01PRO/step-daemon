@@ -34,10 +34,16 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
   val deccelStartTime = accelTime + coastTime
 
   val time = accelTime + coastTime + deccelTime
-  val halfDist = move.length * 0.5
+  //val halfDist = move.length * 0.5
 
-  if(accelDist > halfDist) throw PreEaseLimit
-  if(deccelDist > halfDist) throw PostEaseLimit
+  //TODO: instead of comparing half dist, make sure the sum is less than move.length
+  //if(accelDist > halfDist) throw PreEaseLimit
+  //if(deccelDist > halfDist) throw PostEaseLimit
+
+  if((accelDist + deccelDist) > move.length) {
+    if(accelDist > deccelDist) throw PreEaseLimit
+    else throw PostEaseLimit
+  }
 
   require(accelTime >= 0, (accelTime, this).toString)
   require(deccelTime >= 0, (deccelTime, this).toString)

@@ -16,6 +16,12 @@
 
 package com.colingodsey.stepd.planner
 
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.File
+import javax.imageio.ImageIO
+
+import scala.concurrent.blocking
 import com.colingodsey.logos.collections.{Epsilon, Vec2, Vec3}
 import org.apache.commons.math3.analysis.interpolation.{BicubicInterpolator, PiecewiseBicubicSplineInterpolator}
 import json._
@@ -228,4 +234,39 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
   }
 
   def reader() = new Reader(produce(), xMax, yMax)
+
+  def createImage(outPath: String, subSamples: Int = 10): Unit = blocking {
+    val img = new BufferedImage(xMax * subSamples, yMax * subSamples, BufferedImage.TYPE_INT_RGB)
+
+    val reader = this.reader()
+
+    for {
+      x <- 0 until xMax * subSamples
+      y <- 0 until yMax * subSamples
+    } {
+      val z = reader.getOffset(x / subSamples.toDouble, y / subSamples.toDouble).toDouble
+
+      val z0 = (z - reader.minZ) / (reader.maxZ - reader.minZ)
+      //val z0 = (z + 1.0) / 2.0
+      val totalSpace = 255 * 3
+      val z1 = z0 * totalSpace
+
+      require(z0 >= -0.00001f, z0.toString)
+      require(z0 <= 1.000001f, z0.toString)
+
+      val r = math.min(math.max(z1, 0), 255).toInt
+      val g = math.min(math.max(z1 - 255, 0), 255).toInt
+      val b = math.min(math.max(z1 - 255 * 2, 0), 255).toInt
+      val c = math.min(math.max(z0 * 255, 0), 255).toInt
+
+      //val color = new Color(r - b, g, b).getRGB
+      //val color = Color.getHSBColor(z0.toFloat, 1.0f, r / 255f).getRGB
+      val color = Color.getHSBColor(z0.toFloat, 1.0f, 1.0f).getRGB
+      //val color = new Color(c, c, c).getRGB
+
+      img.setRGB(x, y, color)
+    }
+
+    ImageIO.write(img, "PNG", new File(outPath))
+  }
 }

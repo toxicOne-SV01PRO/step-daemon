@@ -30,8 +30,10 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
   var deltasProcessed: Int = 0
   var curTimer: Option[Cancellable] = None
 
+  var isAbsolute = true
+
   //TODO: maybe need a timeout here?
-  def waitingM114: Receive = {
+  def waitingM114: Receive = pipeline orElse {
     case LineSerial.Response(str) if str.startsWith("X:") && str.contains(" Count ") =>
       //Recv: X:0.00 Y:0.00 Z:10.00 E:0.00 Count X:0 Y:0 Z:16000
       val parts = str.trim.split(' ')
@@ -56,8 +58,11 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
     case GetPos if !ignoreM114 =>
       //stop processing all other messages until we get a response from this
       ack()
-      sendDown(GetPos)
+
+      //new behavior first
       context become waitingM114
+
+      sendDown(GetPos)
 
       log info "syncing pipeline position"
     case x: SetPos =>
@@ -68,6 +73,21 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
     case x: GMove =>
       ack()
       process(x)
+
+    case SetAbsolute =>
+      ack()
+      sendDown(SetAbsolute)
+
+      log info "setting to absolute coords"
+
+      isAbsolute = true
+    case SetRelative =>
+      ack()
+      sendDown(SetRelative)
+
+      log info "setting to relative coords"
+
+      isAbsolute = false
     case x: Command =>
       ack()
 

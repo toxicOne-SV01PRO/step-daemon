@@ -25,13 +25,17 @@ import scala.concurrent.duration._
 
 class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends PhysicsProcessor with Pipeline {
   var faultCounts = Map[MathFault, Int]()
+  var acc = cfg.accel
 
   def recordFault(fault: MathFault): Unit = {
     val count = faultCounts.getOrElse(fault, 0) + 1
 
     faultCounts += fault -> count
 
-    log.warning("fault: {}", fault.toString)
+    if(fault != LookaheadFault)
+      log.warning("fault: {}", fault.toString)
+    else
+      log.debug("fault: {}", fault.toString)
   }
 
   def process(trap: Trapezoid): Unit = {
@@ -46,7 +50,6 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
     sendDown(cmd)
   }
 
-  def acc = cfg.accel
   def jerk = cfg.jerk
 
   def receive: Receive = pipeline orElse {
@@ -59,8 +62,20 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
     case delta: MoveDelta =>
       ack()
       process(delta)
-    case cmd: SetPos =>
+
+    case cmd @ SetMaxAcceleration(x, y, z, e) =>
+      //finish current trap before setting
       endTrapAndContinue(cmd)
+
+      acc = Vector4D(
+        x.getOrElse(acc.x),
+        y.getOrElse(acc.y),
+        z.getOrElse(acc.z),
+        e.getOrElse(acc.e)
+      )
+
+    case setPos: SetPos =>
+      endTrapAndContinue(setPos)
     case cmd: Command =>
       endTrapAndContinue(cmd)
   }

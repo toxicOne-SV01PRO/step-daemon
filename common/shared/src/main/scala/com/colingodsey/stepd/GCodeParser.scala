@@ -32,9 +32,15 @@ trait GCodeParser {
       case "G29" =>
         //send the verbose version of the command
         processCommand(ZProbe)
+        //home afterwards
+        processCommand(Home.All)
         GetPos
+      case "G90" => SetAbsolute
+      case "G91" => SetRelative
       case "G92" => SetPos(raw)
+
       case "M114" => GetPos
+      case "M201" => SetMaxAcceleration(raw)
       case _ => raw
     }
 

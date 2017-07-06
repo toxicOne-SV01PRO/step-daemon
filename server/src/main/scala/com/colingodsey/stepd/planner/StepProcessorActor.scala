@@ -59,6 +59,8 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
       unstashAll()
 
       log info "got mesh leveling data"
+
+      context become normal
     case _ => stash()
   }
 
@@ -72,11 +74,12 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
       sendDown(x)
     case ZProbe =>
       ack()
-      flushChunk()
-      sendDown(ZProbe)
 
       log info "waiting for leveling data"
       context become waitLeveling
+
+      flushChunk()
+      sendDown(ZProbe)
     case cmd: Command if cmd.isGCommand =>
       ack()
       flushChunk()

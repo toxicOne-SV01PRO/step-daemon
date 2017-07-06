@@ -50,10 +50,9 @@ trait PhysicsProcessor {
     val accelTime = if(accel == 0) 0.0 else dfr / accel
     val accelDist = accel * accelTime * accelTime * 0.5 + startFr * accelTime
 
+    //comparing to the half point is inaccurate, but we dont know the next trap
     post.isValid && accelDist >= (post.length * 0.5)
   }
-
-  //TODO: is there any way to do a resize that allows a start *deccel* instead of accel?
 
   /*
   Use the inner (dot) product of the 4d vectors to determine jerk, accel, and junction feed rate.

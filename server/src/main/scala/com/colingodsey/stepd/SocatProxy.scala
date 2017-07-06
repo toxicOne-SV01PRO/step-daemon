@@ -78,7 +78,6 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
     case LineSerial.Response(str) if str.startsWith("ok N") =>
     //case LineSerial.Response(str) if str.startsWith("ok ") =>
     case LineSerial.Response(str) if str.startsWith("!") =>
-      log.info(str)
     case LineSerial.Response(str) =>
       serialRef.get ! LineSerial.Bytes(str)
       serialRef.get ! LineSerial.Bytes("\n")

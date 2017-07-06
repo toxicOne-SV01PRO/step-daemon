@@ -46,4 +46,10 @@ cat hellbenchy.gcode | tee /tmp/pty-stepd-client
 ```
 * Or connect OctoPrint directly to the server:
   * Add a custom serial port to OctoPrint for  */tmp/pty-stepd-client*.
-  * Connect using any baud rate.
+  * Restart OctoPrint if port does not show in the list (make sure stepd is running).
+  * Connect using *auto* baud rate (must be auto).
+
+## Marlin Configuration ##
+* Only XYZ builds currently supported (no core or delta support yet).
+* Enable *CHUNK_SUPPORT*.
+* (Optional) Enable *AUTO_BED_LEVELING_BILINEAR* for bed leveling (only supported mode currently).

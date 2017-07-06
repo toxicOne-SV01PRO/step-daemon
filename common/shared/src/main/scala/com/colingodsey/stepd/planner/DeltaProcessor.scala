@@ -29,13 +29,15 @@ trait DeltaProcessor {
   import DeltaProcessor._
 
   var pos = Vector4D.Zero
-  private var _fr: Double = 0.0
+  private var _fr = 0.0
+
+  def process(delta: MoveDelta): Unit
+
+  def isAbsolute: Boolean
 
   def fr = _fr
 
-  def frScale: Double = 1.0
-
-  def process(delta: MoveDelta): Unit
+  def frScale = 1.0
 
   def process(move: Move): Unit = {
     val d = MoveDelta(pos, move, move.f)
@@ -49,11 +51,17 @@ trait DeltaProcessor {
     process(d)
   }
 
+  def mRel(opt: Option[Double], dPos: Double): Double = opt match {
+    case None => dPos
+    case Some(x) if isAbsolute => x
+    case Some(x) => x + dPos
+  }
+
   def process(move: GMove): Unit = {
-    val x = move.x.getOrElse(pos.x)
-    val y = move.y.getOrElse(pos.y)
-    val z = move.z.getOrElse(pos.z)
-    val e = move.e.getOrElse(pos.e)
+    val x = mRel(move.x, pos.x)
+    val y = mRel(move.y, pos.y)
+    val z = mRel(move.z, pos.z)
+    val e = mRel(move.e, pos.e)
     val f = move.f.getOrElse(fr)
 
     _fr = f

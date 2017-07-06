@@ -48,9 +48,9 @@ trait Pipeline extends Actor with Stash with ActorLogging with Pipeline.Terminat
     }
   }
 
-  def onWake(): Unit = log info "onWake"
+  def onWake(): Unit = log debug "onWake"
 
-  def onWait(): Unit = log info "onWait"
+  def onWait(): Unit = log debug "onWait"
 
   def pipeline: Receive = {
     case Ack =>

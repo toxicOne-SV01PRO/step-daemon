@@ -72,18 +72,23 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
   def flushPoints(): Unit = {
     log.info("processing bed level points")
 
-    currentLeveling = Some(MeshLeveling(pointsBuffer.toSeq, cfg.bedMaxX, cfg.bedMaxY))
+    val newLeveling = MeshLeveling(pointsBuffer.toSeq, cfg.bedMaxX, cfg.bedMaxY)
+
+    currentLeveling = Some(newLeveling)
 
     pointsBuffer = pointsBuffer.empty
     isReading = false
 
     sendReader()
     saveToFile()
+    newLeveling.createImage("bedlevel.png")
   }
 
   def receive = {
     case SerialGCode.Response(MeshLeveling.OutputLine(point)) if isReading =>
       pointsBuffer += point
+    case SerialGCode.Response(str) if isReading && str.startsWith("Bilinear Leveling Grid:") =>
+      flushPoints()
     case SerialGCode.Response(line @ MeshLeveling.OutputLine(_)) =>
       log.warning("Not expecting bed point: " + line)
     case SerialGCode.Command(cmd) if cmd.startsWith("G29 ") =>
