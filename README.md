@@ -33,6 +33,7 @@ in hot spots where precision can be leveraged safely.
 * **SBT** should come pre-bundled with stepd.
 
 ## Marlin Configuration ##
+* Update with [current compatible branch](https://github.com/colinrgodsey/Marlin/tree/chunk_support2).
 * Only XYZ cartesian builds currently supported (no core or delta support yet).
 * Baud rate of 250kbps or 500kbps suggested for 16MHz devices.
 * Enable *CHUNK_SUPPORT*.
