@@ -103,7 +103,6 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
 
   override def preStart(): Unit = {
     super.preStart()
-    //checkPosTimer()
 
     context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
   }

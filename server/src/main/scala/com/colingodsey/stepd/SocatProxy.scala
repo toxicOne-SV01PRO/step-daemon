@@ -117,6 +117,10 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
     super.preStart()
 
     context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
+
+    //incase we didnt shut down cleanly last time
+    Try(s"rm $clientDevice".!)
+    Try(s"rm $serverDevice".!)
   }
 
   override def onWake(): Unit = {

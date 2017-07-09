@@ -34,21 +34,25 @@ object Serial {
   case object PauseRead extends FlowCommand
   case object ResumeRead extends FlowCommand
 
+  /*
+  NOTE: JSSC doesnt give is a good way to do an interruptable blocking read.
+
+  By default, do the blocking read we cant interrupt. This makes system shutdown
+  time out with a messy exist.
+
+  If you can afford to spend the CPU, or are developing stepd, use the property
+  USE_POLLING_READ.
+   */
+  val UsePollingRead = System.getProperty("USE_POLLING_READ") != null
+
   class Reader(port: SerialPort) extends Actor with Stash with ActorLogging {
     self ! Read
 
-    //TODO: the pure blocking form really is the best way to do serial. but JSSC sucks, so we're screwed
-    /*def read(): Unit = {
-      val available = port.getInputBufferBytesCount
-      val toRead = math.max(math.min(available, 1024), 1)
-
-      val dat = blocking(port.readBytes(toRead))
-
-      context.parent ! Serial.Bytes(ByteString.empty ++ dat)
-    }*/
+    if(UsePollingRead)
+      log info "using polling read"
 
     def read(): Unit = {
-      val firstByte = try blocking(port.readBytes(1, 1000)) catch {
+      val firstByte = try pollOrBlockReadByte catch {
         case _: jssc.SerialPortTimeoutException => null
       }
 
@@ -67,6 +71,12 @@ object Serial {
 
           context.parent ! Serial.Bytes(out)
       }
+    }
+    def pollOrBlockReadByte: Array[Byte] = blocking {
+      if(UsePollingRead)
+        port.readBytes(1, 1000)
+      else
+        port.readBytes(1)
     }
 
     def paused: Receive = {
