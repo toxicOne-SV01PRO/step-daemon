@@ -16,6 +16,8 @@
 
 package com.colingodsey.stepd.serial
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.stepd.planner.DeviceConfig
@@ -37,70 +39,48 @@ object Serial {
   /*
   NOTE: JSSC doesnt give is a good way to do an interruptable blocking read.
 
-  By default, do the blocking read we cant interrupt. This makes system shutdown
-  time out with a messy exist.
-
-  If you can afford to spend the CPU, or are developing stepd, use the property
-  USE_POLLING_READ.
+  This thread may get stuck open forever... not much we can do about it.
    */
-  val UsePollingRead = System.getProperty("USE_POLLING_READ") != null
+
+  class ReaderThread(port: SerialPort, self: ActorRef) extends Thread {
+    val shouldRead = new AtomicBoolean(true)
+    val shouldClose = new AtomicBoolean(false)
+
+    override def run(): Unit = {
+      while(!shouldClose.get) {
+        if (shouldRead.get) {
+          val bytes = port.readBytes()
+
+          if(bytes != null)
+            self ! bytes
+        } else Thread.sleep(10)
+      }
+    }
+  }
 
   class Reader(port: SerialPort) extends Actor with Stash with ActorLogging {
-    self ! Read
+    val thread = new ReaderThread(port, self)
 
-    if(UsePollingRead)
-      log info "using polling read"
+    thread.setDaemon(true)
+    thread.setName("Serial.Reader")
+    thread.start()
 
-    def read(): Unit = {
-      val firstByte = try pollOrBlockReadByte catch {
-        case _: jssc.SerialPortTimeoutException => null
-      }
-
-      val available = port.getInputBufferBytesCount
-      val toRead = math.min(available, 1024)
-
-      firstByte match {
-        case null =>
-        case firstByte if available == 0 =>
-          context.parent ! Serial.Bytes(ByteString.empty ++ firstByte)
-        case firstByte =>
-          val out = blocking(port.readBytes(toRead)) match {
-            case null => ByteString.empty ++ firstByte
-            case bytes => ByteString.empty ++ firstByte ++ bytes
-          }
-
-          context.parent ! Serial.Bytes(out)
-      }
-    }
-    def pollOrBlockReadByte: Array[Byte] = blocking {
-      if(UsePollingRead)
-        port.readBytes(1, 1000)
-      else
-        port.readBytes(1)
-    }
-
-    def paused: Receive = {
+    def receive = {
+      case bytes: Array[Byte] =>
+        context.parent ! Serial.Bytes(ByteString.empty ++ bytes)
       case ResumeRead =>
-        log debug "resumed"
-        context become normal
-        unstashAll()
-      case _ =>
-        stash()
-    }
-
-    def normal: Receive = {
-      case Read =>
-        read()
-
-        self ! Read
+        log info "resuming"
+        thread.shouldRead set true
       case PauseRead =>
-        log debug "paused"
-        context become paused
+        log debug "pausing"
+        thread.shouldRead set false
     }
 
-    def receive = normal
+    override def postStop(): Unit = {
+      super.postStop()
 
-    object Read
+      thread.shouldClose set true
+    }
   }
 
   class Writer(port: SerialPort) extends Actor with ActorLogging {
@@ -124,9 +104,7 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
     Props(classOf[Writer], port).withDispatcher("akka.io.pinned-dispatcher"),
     name = "writer")
 
-  val reader = context.actorOf(
-    Props(classOf[Reader], port).withDispatcher("akka.io.pinned-dispatcher"),
-    name = "reader")
+  val reader = context.actorOf(Props(classOf[Reader], port), name = "reader")
 
   def initPort = {
     log.info {
