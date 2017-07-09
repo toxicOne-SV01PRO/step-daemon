@@ -49,11 +49,11 @@ object Serial {
     override def run(): Unit = {
       while(!shouldClose.get) {
         if (shouldRead.get) {
-          val bytes = port.readBytes()
+          val bytes1 = Option(port.readBytes(1)).getOrElse(Array.empty)
+          val bytes = Option(port.readBytes()).getOrElse(Array.empty)
 
-          if(bytes != null)
-            self ! bytes
-        } else Thread.sleep(10)
+          self ! (ByteString.empty ++ bytes1 ++ bytes)
+        } else Thread.sleep(1)
       }
     }
   }
@@ -66,8 +66,8 @@ object Serial {
     thread.start()
 
     def receive = {
-      case bytes: Array[Byte] =>
-        context.parent ! Serial.Bytes(ByteString.empty ++ bytes)
+      case bytes: ByteString =>
+        context.parent ! Serial.Bytes(bytes)
       case ResumeRead =>
         log info "resuming"
         thread.shouldRead set true
