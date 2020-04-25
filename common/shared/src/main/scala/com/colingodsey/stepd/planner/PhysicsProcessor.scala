@@ -19,18 +19,25 @@ package com.colingodsey.stepd.planner
 import com.colingodsey.stepd.Math._
 
 /* takes move deltas, and produces iterable positions */
+object PhysicsProcessor {
+  final val MaxResizes = 30
+  final val ResizeFactor = 0.80
+}
+
 trait PhysicsProcessor {
-  def acc: Vector4D
-  def jerk: Vector4D
+  import PhysicsProcessor._
 
   var lastDelta = MoveDelta.Empty
   var curDelta = MoveDelta.Empty
+
+  def acc: Vec4
+  def jerk: Vec4
 
   def recordFault(fault: MathFault): Unit
 
   def process(trap: Trapezoid): Unit
 
-  def maxResizes = 15
+  def maxResizes = MaxResizes
 
   def pushDelta(nextDelta: MoveDelta): Unit = {
     lastDelta = curDelta
@@ -45,7 +52,7 @@ trait PhysicsProcessor {
 
   def willStartFrCauseResize(startFr: Double, post: MoveDelta): Boolean = {
     val dfr = post.f - startFr
-    val accel = post.d.abs.normal * acc
+    val accel = post.d.abs.normal ⋅ acc
 
     val accelTime = if(accel == 0) 0.0 else dfr / accel
     val accelDist = accel * accelTime * accelTime * 0.5 + startFr * accelTime
@@ -73,20 +80,24 @@ trait PhysicsProcessor {
     val dvStart = moveDelta.v - pre.v
     val frMaxStart = math.min(moveDelta.f, pre.f)
     val frStart = if(pre.isValid) frMaxStart * {
-      val f = pre.d.normal * moveDelta.d.normal
+      val f = pre.d.normal ⋅ moveDelta.d.normal
+      val jf = dvStart.abs ⋅ jerk.normal
 
-      if(dvStart.abs * jerk.normal < jerk.length) 1.0
+      //TODO: use jerk factor as lower bounds for clamp? scaled for the fr...
+
+      if(jf < jerk.length) 1.0
       else clamp(0.0, f, 1.0)
     } else 0.0
 
-    val frAccel = moveDelta.d.abs.normal * acc
+    val frAccel = moveDelta.d.abs.normal ⋅ acc
 
     val dvEnd = post.v - moveDelta.v
     val frMaxEnd = math.min(moveDelta.f, post.f)
     val frEnd = if(post.isValid) frMaxEnd * {
-      val f = moveDelta.d.normal * post.d.normal
+      val f = moveDelta.d.normal ⋅ post.d.normal
+      val jf = dvEnd.abs ⋅ jerk.normal
 
-      if(dvEnd.abs * jerk.normal < jerk.length) 1.0
+      if(jf < jerk.length) 1.0
       else clamp(0.0, f, 1.0)
     } else 0.0
 
@@ -112,7 +123,7 @@ trait PhysicsProcessor {
       case x: EaseLimit =>
         if(maxTimes == maxResizes) recordFault(x)
 
-        createTrapezoidSafe(pre, moveDelta.scaleFr(0.5), post, maxTimes - 1)
+        createTrapezoidSafe(pre, moveDelta scaleFr ResizeFactor, post, maxTimes - 1)
     }
   }
 
@@ -124,9 +135,10 @@ trait PhysicsProcessor {
       case LookaheadFault =>
         recordFault(LookaheadFault)
 
-        require(nextDelta.f > 0.001, "unable to handle LookaheadHalt")
+        //could loop for a long time, but eventually we get below the epsilon
+        require(nextDelta.f > Epsilon.e, "unable to handle LookaheadHalt")
 
-        process(nextDelta.scaleFr(0.5))
+        process(nextDelta scaleFr ResizeFactor)
     }
   }
 }

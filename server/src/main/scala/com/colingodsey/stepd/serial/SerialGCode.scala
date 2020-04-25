@@ -18,7 +18,10 @@ package com.colingodsey.stepd.serial
 
 import akka.actor._
 import akka.util.ByteString
+
 import com.colingodsey.stepd.planner.DeviceConfig
+
+import scala.concurrent.duration._
 
 object SerialGCode {
   case class Command(cmd: String)
@@ -27,17 +30,19 @@ object SerialGCode {
   type Response = LineSerial.Response
   val Response = LineSerial.Response
 
-  val MaxQueue = 1
-  val MaxIncr = 998
-  val NumReset = "M110 N0"
+  type ControlResponse = LineSerial.ControlResponse
+  val ControlResponse = LineSerial.ControlResponse
+
+  val MaxQueue = 3
+  val MaxIncr = 99
+  val NumReset = "M110"
 }
 
 class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging {
   import SerialGCode._
 
   var nIncr = 1
-  var waitOk = 0
-  var lastMsgAndSender: Option[(ActorRef, Command)] = None
+  var pending = Map[Int, (ActorRef, Command)]()
 
   val lineSerial: ActorRef = context.actorOf(
     Props(classOf[LineSerial], cfg),
@@ -48,38 +53,41 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
 
     //TODO: does this initial one ever respond with an OK?
     lineSerial ! Serial.Bytes(NumReset + "\r\n")
+
+    implicit def ec = context.dispatcher
+    context.system.scheduler.scheduleWithFixedDelay(1.seconds, 5.seconds) { () =>
+      //TEST!!!!
+      log.info(pending.toString)
+    }
   }
 
-  //TODO: does this respond with an ok?
-  def resetNumbering(): Unit =
-    self ! Command(NumReset)
+  def sendCommand(str: String) = {
+    val str0 = s"N$nIncr $str"
+    val bytes = ByteString.fromString(str0)
+    val check = bytes.foldLeft(0)(_ ^ _) & 0xFF
+    val finalBytes = bytes ++ ByteString.fromString(s"*$check\r\n")
 
-  //TODO: handle fail retries using lastMsgAndSender. Or just hope it doesnt fail for now ;)
+    log.info("send: {}*{}", str0, check)
+
+    lineSerial ! Serial.Bytes(finalBytes)
+  }
 
   def receive = {
-    case _: Command if waitOk >= MaxQueue =>
+    case _: Command if pending.size >= MaxQueue =>
       stash()
     case cmd @ Command(str0) =>
       val str = str0.trim
 
-      if(nIncr > MaxIncr)
-        resetNumbering()
+      if(nIncr > MaxIncr) {
+        nIncr = 1
+        sendCommand(NumReset)
+        nIncr += 1
+      }
 
-      val withN = s"N$nIncr $str"
-      val withNBytes = ByteString.fromString(withN)
-      val check = withNBytes.foldLeft(0)(_ ^ _) & 0xFF
-      val finalBytes = withNBytes ++ ByteString.fromString(s"*$check\r\n")
+      sendCommand(str)
+      pending += nIncr -> (sender, cmd)
 
-      log.info("send: {}*{}", withN, check)
-
-      lineSerial ! Serial.Bytes(finalBytes)
-
-      lastMsgAndSender = Some(sender, cmd)
-
-      if(str == NumReset) nIncr = 1
-      else nIncr += 1
-
-      waitOk += 1
+      nIncr += 1
 
       context.system.eventStream.publish(cmd)
 
@@ -90,25 +98,22 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
       lineSerial ! x
 
     case a @ Response(str) if str.startsWith("ok N") || str.startsWith("ok T") =>
-      waitOk -= 1
       unstashAll()
 
       log.info("ok: {}", str)
 
-      //TODO: lets actually check N values here...
+      if (str.startsWith("ok N")) {
+        val n = str.drop(4).takeWhile(_ != ' ').toInt
 
-      lastMsgAndSender match {
-        case None =>
-          log.warning("Got an ok, but no sender to respond to")
-        case Some((ref, cmd)) =>
-          ref ! Completed(cmd)
-      }
+        pending get n match {
+          case None if n > 1 =>
+            log.warning("Got an ok, but no sender to respond to")
+          case None =>
+          case Some((ref, cmd)) =>
+            ref ! Completed(cmd)
+        }
 
-      lastMsgAndSender = None
-
-      if(waitOk < 0) {
-        log.warning("Received more OKs than commands sent")
-        waitOk = 0
+        pending -= n
       }
 
       //goofy M105 response
@@ -118,8 +123,8 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
       log.warning("Got an ok for no reason: {}", str)
     case Response(str) if str.startsWith("ok") =>
       log.warning("Random ok with no N value: {}", str)
-    case a: Response =>
-      //any other text line we broadcast out to our subscribers
-      context.system.eventStream.publish(a)
+    //any other line we broadcast out to our subscribers
+    case a: Response => context.system.eventStream.publish(a)
+    case a: ControlResponse => context.system.eventStream.publish(a)
   }
 }

@@ -20,9 +20,10 @@ import akka.actor._
 
 object Pipeline {
   case object Ack
+  case object Status
 
   val MaxPending = 32
-  val MinPending = 16
+  val MinPending = 24
 
   trait Terminator { _: Actor =>
     def ack(ref: ActorRef = sender): Unit = ref ! Ack
@@ -35,13 +36,23 @@ trait Pipeline extends Actor with Stash with ActorLogging with Pipeline.Terminat
   var pending = 0
   var isWaiting = false
 
+  import scala.concurrent.duration._
+  implicit def __ec = context.dispatcher
+  context.system.scheduler.scheduleWithFixedDelay(1.seconds, 5.seconds) { () =>
+    //TEST!!!!
+    log.info(s"isWaiting $isWaiting")
+  }
+
   def next: ActorRef
+
+  def maxPending = Pipeline.MaxPending
+  def minPending = Pipeline.MinPending
 
   def sendDown(msg: Any): Unit = {
     next ! msg
     pending += 1
 
-    if(pending >= MaxPending && !isWaiting) {
+    if(pending >= maxPending && !isWaiting) {
       context.become(waiting, discardOld = false)
       isWaiting = true
       onWait()
@@ -63,12 +74,13 @@ trait Pipeline extends Actor with Stash with ActorLogging with Pipeline.Terminat
 
       require(pending >= 0, "Ack tracking fault! Is something double Acking somewhere?")
 
-      if(pending < MinPending) {
+      if(pending < minPending) {
         context.unbecome()
         isWaiting = false
         unstashAll()
         onWake()
       }
+    case Status =>
     case _ => stash()
   }
 }

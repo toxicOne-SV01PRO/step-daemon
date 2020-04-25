@@ -16,7 +16,7 @@
 
 package com.colingodsey.stepd
 
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 
 object GCode {
   object Command {
@@ -51,8 +51,8 @@ object GCode {
     def hasPart(ident: Char) = getPart(ident).isDefined
   }
 
-  case class CMove(chunkIdx: Int, nChunks: Int) extends Command {
-    val raw = Raw(s"C0 I$chunkIdx R$nChunks")
+  case class GDirectMove(chunkIdx: Int) extends Command {
+    val raw = Raw(s"G6 I$chunkIdx")
 
     def isGCommand = false
   }
@@ -81,7 +81,7 @@ object GCode {
         raw.getPart('E').map(_.toDouble)
       )(raw)
 
-    def apply(pos: Vector4D): SetPos = {
+    def apply(pos: Vec4): SetPos = {
       val line = s"G92 X${pos.x.toFloat} Y${pos.y.toFloat} Z${pos.z.toFloat} E${pos.e.toFloat}"
 
       SetPos(
@@ -106,10 +106,6 @@ object GCode {
   }
 
   case class SetMaxAcceleration(x: Option[Double], y: Option[Double], z: Option[Double], e: Option[Double])(val raw: Raw) extends GCommand
-
-  case object GetPos extends MCommand {
-    val raw = Raw("M114")
-  }
 
   case object ZProbe extends GCommand {
     val raw = Raw("G29 V3 T")
@@ -144,4 +140,22 @@ object GCode {
       str.trim
     }
   }
+
+  case object GetPos extends MCommand {
+    val raw = Raw("M114")
+  }
+
+  object FlowRate {
+    def apply(raw: Raw): FlowRate =
+      FlowRate(raw.getPart('S').map(_.toDouble))(raw)
+  }
+
+  case class FlowRate(perc: Option[Double])(val raw: Raw) extends MCommand
+
+  object FeedRate {
+    def apply(raw: Raw): FeedRate =
+      FeedRate(raw.getPart('S').map(_.toDouble))(raw)
+  }
+
+  case class FeedRate(perc: Option[Double])(val raw: Raw) extends MCommand
 }

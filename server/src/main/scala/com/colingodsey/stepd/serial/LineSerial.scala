@@ -17,13 +17,18 @@
 package com.colingodsey.stepd.serial
 
 import akka.actor._
+import akka.util.ByteString
 import com.colingodsey.stepd.planner.DeviceConfig
 
 object LineSerial {
   case class Response(str: String)
+  case class ControlResponse(data: ByteString)
 
   type Bytes = Serial.Bytes
   val Bytes = Serial.Bytes
+
+  val ControlChar = '!'
+  val ControlLineLength = 4 + 1
 }
 
 class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
@@ -37,30 +42,39 @@ class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
 
   val dataBuffer = new Array[Byte](1024)
   var bufferIdx = 0
+  var isControl = false
 
   def processStr(str: String): Unit = {
     log.debug("recv: {}", str)
-
     context.parent ! Response(str)
   }
 
+  def bufferByte(b: Byte): Unit = {
+    dataBuffer(bufferIdx) = b
+    bufferIdx += 1
+  }
+
   def processByte(b: Byte): Unit = b.toChar match {
-    case '\r' | '\n' if bufferIdx == 0 => //ignore
-    case '\r' | '\n' =>
-      val str = new String(dataBuffer, 0, bufferIdx, "UTF8")
-
-      processStr(str)
-
+    case '\r' | '\n' if bufferIdx == 0 => // skip
+    case ControlChar if bufferIdx == 0 => // control char on new line
+      isControl = true
+      bufferByte(b)
+    case '\r' | '\n' if !isControl =>
+      processStr(new String(dataBuffer, 0, bufferIdx, "UTF-8"))
       bufferIdx = 0
-    case _ =>
-      dataBuffer(bufferIdx) = b
-      bufferIdx += 1
+    case '\r' | '\n' if isControl && (bufferIdx > ControlLineLength) =>
+      val bytes = ByteString(dataBuffer.slice(1, bufferIdx))
+      require(bytes.length == ControlLineLength)
+
+      context.parent ! ControlResponse(bytes)
+      isControl = false
+      bufferIdx = 0
+
+    case _ => bufferByte(b)
   }
 
   def receive = {
-    case Serial.Bytes(data) if sender == serial =>
-      data foreach processByte
-    case x: Serial.Bytes =>
-      serial ! x
+    case Bytes(data) if sender == serial => data foreach processByte
+    case x: Bytes => serial ! x
   }
 }

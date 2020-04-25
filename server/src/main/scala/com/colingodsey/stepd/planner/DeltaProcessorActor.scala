@@ -19,7 +19,7 @@ package com.colingodsey.stepd.planner
 import com.colingodsey.stepd.Pipeline
 import com.colingodsey.stepd.GCode._
 import akka.actor._
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 import com.colingodsey.stepd.serial.LineSerial
 
 import scala.concurrent.duration._
@@ -31,6 +31,10 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
   var curTimer: Option[Cancellable] = None
 
   var isAbsolute = true
+  var frScale = 1.0
+
+  //TODO: need some regular scheduled check to see if if we need to send down an empty delta.
+  //is helpful for single or small sets of commands that dont do anything after
 
   //TODO: maybe need a timeout here?
   def waitingM114: Receive = pipeline orElse {
@@ -43,7 +47,7 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
       val z = parts(2).drop(2).toFloat
       val e = parts(3).drop(2).toFloat
 
-      pos = Vector4D(x, y, z, e)
+      pos = Vec4(x, y, z, e)
 
       log.info("Synced new position from device: " + pos)
 
@@ -88,6 +92,14 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
       log info "setting to relative coords"
 
       isAbsolute = false
+
+    case a @ FeedRate(Some(x)) =>
+      ack()
+      sendDown(a)
+
+      log info s"setting FR scale to $x"
+      frScale = x / 100.0
+
     case x: Command =>
       ack()
 

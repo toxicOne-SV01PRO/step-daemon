@@ -16,13 +16,13 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 
 object MoveDelta {
-  val Empty = MoveDelta(Vector4D.Zero, Vector4D.Zero, 0)
+  val Empty = MoveDelta(Vec4.Zero, Vec4.Zero, 0)
 }
 
-final case class MoveDelta(from: Vector4D, to: Vector4D, f: Double) {
+final case class MoveDelta(from: Vec4, to: Vec4, f: Double) {
   val d = to - from
   val time = (d.length / f)
   val v = d / time

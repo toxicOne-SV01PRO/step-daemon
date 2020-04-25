@@ -73,6 +73,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
   def normal: Receive = pipeline orElse {
     case Serial.Bytes(dat) =>
+      //TODO: "sanitize '!' character"
       dat foreach process
 
     case LineSerial.Response(str) if str.startsWith("ok N") =>

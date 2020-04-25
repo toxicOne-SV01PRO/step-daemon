@@ -20,7 +20,8 @@ import akka.util.ByteString
 
 object Chunk {
   val chunkHeader = ByteString.fromString("!")
-  val chunkFooter = ByteString.empty //ByteString.fromString("\r\n")
+  //Add a an extra line break or two incase a byte gets lost
+  val chunkFooter = ByteString.fromString("\r\n") //ByteString.empty
 
   def apply(bytes: Array[Byte]): Chunk =
     Chunk(ByteString(bytes))
@@ -34,8 +35,12 @@ case class Chunk(rawBytes: ByteString) {
 
   require(rawBytes.length == StepProcessor.BytesPerChunk)
 
-  val check = rawBytes.foldLeft(0)(_ ^ _) & 0xFF
-  val chunk = chunkHeader ++ rawBytes ++ ByteString(check.toByte) ++ chunkFooter
+  def produceBytes(idx: Int, corrupt: Boolean = false): ByteString = {
+    val testCorruption = if (corrupt) 1 else 0
 
-  def length = chunk.length
+    val check = (rawBytes.foldLeft(0)(_ ^ _) & 0xFF) + testCorruption
+    val idxByte = ByteString(idx.toByte)
+
+    chunkHeader ++ idxByte ++ rawBytes ++ ByteString(check.toByte) ++ chunkFooter
+  }
 }

@@ -17,27 +17,25 @@
 package com.colingodsey.stepd.planner
 
 import com.colingodsey.stepd.GCode._
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 
 object DeltaProcessor {
   //absolute values
-  case class Move(x: Double, y: Double, z: Double, e: Double, f: Double) extends Vector4D //feedrate per second
+  case class Move(x: Double, y: Double, z: Double, e: Double, f: Double) extends Vec4 //feedrate per second
 }
 
 //takes absolute positions and produces move deltas
 trait DeltaProcessor {
   import DeltaProcessor._
 
-  var pos = Vector4D.Zero
+  var pos = Vec4.Zero
   private var _fr = 0.0
 
   def process(delta: MoveDelta): Unit
-
+  def frScale: Double
   def isAbsolute: Boolean
 
   def fr = _fr
-
-  def frScale = 1.0
 
   def process(move: Move): Unit = {
     val d = MoveDelta(pos, move, move.f)
@@ -71,7 +69,7 @@ trait DeltaProcessor {
   }
 
   def process(setPos: SetPos): Unit = {
-    pos = Vector4D(
+    pos = Vec4(
       setPos.x.getOrElse(pos.x),
       setPos.y.getOrElse(pos.y),
       setPos.z.getOrElse(pos.z),

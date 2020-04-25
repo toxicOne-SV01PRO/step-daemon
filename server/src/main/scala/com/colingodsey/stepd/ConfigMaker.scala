@@ -18,11 +18,11 @@ package com.colingodsey.stepd
 
 import java.io.File
 
-import com.colingodsey.stepd.Math.Vector4D
-import com.colingodsey.stepd.planner.{DeviceConfig, MeshLevelingConfig, PlannerConfig}
+import com.colingodsey.stepd.Math._
+import com.colingodsey.stepd.planner.{DeviceConfig, FilAdvance, MeshLevelingConfig, PlannerConfig}
 import com.typesafe.config.{Config, ConfigFactory}
 
-import scala.collection.JavaConversions._
+import scala.jdk.CollectionConverters._
 
 object ConfigMaker {
   val config = ConfigFactory.parseFile(new File("./config.conf")) withFallback
@@ -30,19 +30,26 @@ object ConfigMaker {
 
   val stepd = config.getConfig("com.colingodsey.stepd")
   val planner = stepd.getConfig("planner")
+  val fa = stepd.getConfig("fil-advance")
   val device = stepd.getConfig("device")
   val bed = stepd.getConfig("bed")
 
   def plannerConfig = {
-    val accel = planner.getDoubleList("acceleration")
-    val jerk = planner.getDoubleList("jerk")
-    val stepsPerMM = planner.getDoubleList("steps-per-mm")
+    val accel = planner.getDoubleList("acceleration").asScala
+    val jerk = planner.getDoubleList("jerk").asScala
+    val stepsPerMM = planner.getDoubleList("steps-per-mm").asScala
 
     PlannerConfig(
-      accel = Vector4D(accel(_)),
-      jerk = Vector4D(jerk(_)),
-      stepsPerMM = Vector4D(stepsPerMM(_)),
-      ticksPerSecond = planner.getInt("ticks-per-second")
+      accel = Vec4(accel(_)),
+      jerk = Vec4(jerk(_)),
+      stepsPerMM = Vec4(stepsPerMM(_)),
+      ticksPerSecond = planner.getInt("ticks-per-second"),
+      filAdvance = FilAdvance(
+        m = fa.getDouble("m"),
+        k = fa.getDouble("k"),
+        ζ = fa.getDouble("ζ"),
+        vMax = fa.getDouble("v-max")
+      )
     )
   }
 

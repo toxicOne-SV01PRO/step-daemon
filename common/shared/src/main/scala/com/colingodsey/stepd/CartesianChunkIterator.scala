@@ -16,7 +16,7 @@
 
 package com.colingodsey.stepd
 
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 import com.colingodsey.stepd.planner.{DeltaProcessor, MeshLevelingReader, PhysicsProcessor, StepProcessor}
 
 object CartesianChunkIterator {
@@ -26,7 +26,7 @@ object CartesianChunkIterator {
 abstract class CartesianChunkIterator(val gcode: String) extends LineParser with GCodeParser
     with StepProcessor with DeltaProcessor with PhysicsProcessor with Iterator[CartesianChunkIterator.Response] {
   private val gcodeIterator = gcode.iterator
-  private var responseList = Stream[CartesianChunkIterator.Response]()
+  private var responseList = LazyList[CartesianChunkIterator.Response]()
 
   def leveling: MeshLevelingReader = MeshLevelingReader.Empty
 
@@ -69,7 +69,7 @@ abstract class CartesianChunkIterator(val gcode: String) extends LineParser with
 }
 
 object CartesianDeltaIterator {
-  type Response = Either[Vector4D, GCode.Command]
+  type Response = Either[Vec4, GCode.Command]
 
   def chunkIter(chunk: Array[Byte]): Iterator[Response] = new Iterator[Response] {
     var idx = 0
@@ -87,7 +87,7 @@ object CartesianDeltaIterator {
 
       idx += 2
 
-      Left(Vector4D(
+      Left(Vec4(
         xRaw - 7,
         yRaw - 7,
         zRaw - 7,

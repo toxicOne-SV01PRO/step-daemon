@@ -53,8 +53,8 @@ object DummyTest extends TestSuite {
 
     val phase = new PhysicsProcessor {
       //val acc: Accel = Position.One * 0.01f
-      val acc = Vector4D(2000, 1500, 100, 10000)
-      val jerk = Vector4D(15, 10, 0.4f, 5)
+      val acc = Vec4(2000, 1500, 100, 10000)
+      val jerk = Vec4(15, 10, 0.4f, 5)
 
       var trap: Trapezoid = null
 
@@ -67,7 +67,7 @@ object DummyTest extends TestSuite {
     }
 
     val deltas = {
-      var lastPos: Vector4D = Vector4D.Zero
+      var lastPos: Vec4 = Vec4.Zero
 
       moves map { move =>
         val d = MoveDelta(lastPos, move, move.f)
@@ -78,7 +78,7 @@ object DummyTest extends TestSuite {
       }
     }
 
-    def run(pointFunc: (Vector4D, Double) => Unit): Unit = {
+    def run(pointFunc: (Vec4, Double) => Unit): Unit = {
       var t = 0.0
 
       for(i <- 0 until deltas.length) {
@@ -105,8 +105,8 @@ object DummyTest extends TestSuite {
   val tests = this {
     'Traptest {
       val delta = MoveDelta(
-        Vector4D(0, 0, 0, 0),
-        Vector4D(10, 0, 0, 0),
+        Vec4(0, 0, 0, 0),
+        Vec4(10, 0, 0, 0),
         1
       )
 

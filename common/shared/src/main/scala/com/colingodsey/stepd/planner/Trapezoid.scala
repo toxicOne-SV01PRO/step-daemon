@@ -51,9 +51,9 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
   require(deccelDist >= 0, (deccelDist, this).toString)
 
   def getPos(t: Double): Double = {
-    val ret = if(t < accelTime)
+    val ret = if (t < accelTime) {
       frAccel * t * t * 0.5 + frStart * t
-    else if(t >= deccelStartTime) {
+    } else if(t >= deccelStartTime) {
       val dt = t - deccelStartTime
 
       deccelPos + frDeccel * dt * dt * 0.5 + move.f * dt
@@ -66,7 +66,7 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
     clamp(0.0, ret, move.length)
   }
 
-  def posIterator(tickRate: Double): Iterator[Vector4D] = new Iterator[Vector4D] {
+  def posIterator(tickRate: Double): Iterator[Vec4] = new Iterator[Vec4] {
     val ticks = (time * tickRate).toInt
     val div = time / ticks
 
@@ -74,7 +74,7 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
 
     def hasNext: Boolean = tick < ticks
 
-    def next(): Vector4D = {
+    def next(): Vec4 = {
       val x = if(tick == 0) move.from
       else move.from + move.d.normal * getPos(tick * div)
 

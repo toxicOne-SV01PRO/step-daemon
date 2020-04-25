@@ -45,7 +45,7 @@ class UI extends Application {
   var t = 0.0
   var lastDeadline = Deadline.now
   var trapIdx = 0
-  var lastPos = Vector4D.Zero
+  var lastPos = Vec4.Zero
 
   val speedScale = 1.0
 
@@ -85,7 +85,7 @@ class UI extends Application {
     circle.setRadius(5)
   }
 
-  def render(pos: Vector4D, dt: Double): Unit = {
+  def render(pos: Vec4, dt: Double): Unit = {
     val v = (pos - lastPos).length / dt
     val c = ((v / 200.0) * (1024 + 256) / speedScale).toInt
     val r = math.min(c, 255)
@@ -101,11 +101,11 @@ class UI extends Application {
 }
 
 object UI extends App {
-  //val acc = Vector4D(2000, 1500, 100, 10000) //current settings
-  //val jerk = Vector4D(15, 10, 0.4f, 5)
+  //val acc = Vec4(2000, 1500, 100, 10000) //current settings
+  //val jerk = Vec4(15, 10, 0.4f, 5)
 
-  //val acc = Vector4D(1500, 1000, 100, 10000)
-  //val jerk = Vector4D(7, 5, 0.2, 2.5)
+  //val acc = Vec4(1500, 1000, 100, 10000)
+  //val jerk = Vec4(7, 5, 0.2, 2.5)
 
   val system = ActorSystem()
 
@@ -222,7 +222,7 @@ object UI extends App {
 }*/
 
 object MovementProcessor {
-  var f: Double => Option[Vector4D] = null
+  var f: Double => Option[Vec4] = null
 }
 
 class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline.Terminator {
@@ -240,7 +240,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
   var z = 0L
   var e = 0L
 
-  @volatile var pos = Vector4D.Zero
+  @volatile var pos = Vec4.Zero
 
   MovementProcessor.f = getPos(_)
 
@@ -260,7 +260,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
     z += zRaw - 7
     e += eRaw - 7
 
-    pos = Vector4D(x / stepsPer.x, y / stepsPer.y, z / stepsPer.z, e / stepsPer.e)
+    pos = Vec4(x / stepsPer.x, y / stepsPer.y, z / stepsPer.z, e / stepsPer.e)
 
     //idx += 1
     idx += 8
@@ -273,7 +273,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
     }
   }
 
-  def getPos(dt: Double): Option[Vector4D] = {
+  def getPos(dt: Double): Option[Vec4] = {
     val x = pos
 
     self ! Tick(dt * ticksPerSecond / StepProcessor.StepsPerSegment)
@@ -330,7 +330,7 @@ class MovementProcessorPos extends Actor with Stash with ActorLogging {
 
   MovementProcessor.f = getPos(_)
 
-  def processTrap(dt: Double): Vector4D = synchronized {
+  def processTrap(dt: Double): Vec4 = synchronized {
     val d = trap.getPos(t)
 
     val pos = trap.move.from + trap.move.d.normal * d

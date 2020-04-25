@@ -16,13 +16,21 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 
 case class PlannerConfig(
-    accel: Vector4D,
-    jerk: Vector4D,
-    stepsPerMM: Vector4D,
-    ticksPerSecond: Int
+                          accel: Vec4,
+                          jerk: Vec4,
+                          stepsPerMM: Vec4,
+                          ticksPerSecond: Int,
+                          filAdvance: FilAdvance
+)
+
+case class FilAdvance(
+    k: Double,
+    m: Double,
+    ζ: Double,
+    vMax: Double
 )
 
 case class DeviceConfig(

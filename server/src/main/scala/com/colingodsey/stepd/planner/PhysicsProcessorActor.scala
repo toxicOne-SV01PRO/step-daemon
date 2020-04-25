@@ -67,7 +67,7 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
       //finish current trap before setting
       endTrapAndContinue(cmd)
 
-      acc = Vector4D(
+      acc = Vec4(
         x.getOrElse(acc.x),
         y.getOrElse(acc.y),
         z.getOrElse(acc.z),

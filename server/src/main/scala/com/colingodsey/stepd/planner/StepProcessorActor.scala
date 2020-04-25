@@ -24,11 +24,12 @@ import com.colingodsey.stepd.GCode._
 class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepProcessor with Pipeline {
   var splits = new Array[Int](4)
   var hasSentSpeed = false
+  var filAdvanceK = cfg.filAdvance.k
+
+  var leveling = MeshLevelingReader.Empty
 
   val ticksPerSecond = cfg.ticksPerSecond
   val stepsPerMM = cfg.stepsPerMM
-
-  var leveling = MeshLevelingReader.Empty
 
   context.system.eventStream.subscribe(self, classOf[MeshLeveling.Reader])
 
@@ -43,8 +44,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
     if(!hasSentSpeed) {
       hasSentSpeed = true
 
-      //sendDown(Raw("C0 S" + ticksPerSecond.toInt))
-      sendDown(Raw("C0 S" + ticksPerSecond.toInt))
+      sendDown(Raw("G6 S" + ticksPerSecond.toInt))
     }
 
     sendDown(Chunk(chunk))
@@ -80,6 +80,13 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
 
       flushChunk()
       sendDown(ZProbe)
+    /*case cmd @ LinearAdvance(Some(k)) =>
+      ack()
+      log.info(s"setting lin-advance k to $k")
+      filAdvanceK = k
+      linearAdvance.update()
+      sendDown(cmd)*/
+
     case cmd: Command if cmd.isGCommand =>
       ack()
       flushChunk()

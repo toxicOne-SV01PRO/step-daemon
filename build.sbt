@@ -1,4 +1,9 @@
-lazy val common = crossProject.in(file("common"))
+
+enablePlugins(ScalaJSPlugin)
+
+ThisBuild / scalaVersion := "2.13.1"
+
+lazy val common = crossProject(JSPlatform, JVMPlatform).in(file("common"))
     .settings(name := "print-server-common")
     .settings(Build.commonSettings: _*)
     .jsSettings(Build.jsSettings: _*)
@@ -20,14 +25,17 @@ lazy val debug = project.in(file("debug"))
     .settings(Build.jvmSettings: _*)
     .dependsOn(commonJVM, server)
 
+
+/*
 lazy val webPlayer = project.in(file("web-player"))
+    .enablePlugins(ScalaJSPlugin)
     .settings(
       name := "web-player",
-      scalaJSUseMainModuleInitializer := true
+      scalaJSUseMainModuleInitializer := true,
+      scalaJSStage in Global := FastOptStage
     )
     .settings(Build.commonSettings: _*)
     .settings(Build.jsSettings: _*)
-    .enablePlugins(ScalaJSPlugin).settings(scalaJSStage in Global := FastOptStage)
-    .dependsOn(commonJS)
+    .dependsOn(commonJS)*/
 
 Build.buildSettings

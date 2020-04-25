@@ -16,7 +16,7 @@
 
 package com.colingodsey.stepd
 
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.Vec4
 
 import scala.scalajs.js
 import org.scalajs.dom
@@ -27,20 +27,20 @@ import scala.scalajs.js.annotation.JSExport
 object WebPlayer extends js.JSApp {
   var width = 1
   var height = 1
-  var acc = Vector4D(2000, 1500, 100, 10000) / 2.0
-  var jerk = Vector4D(15, 10, 0.4f, 5)
-  var stepsPerMM = Vector4D(80, 80, 1600, 95.2)
+  var acc = Vec4(2000, 1500, 100, 10000) / 2.0
+  var jerk = Vec4(15, 10, 0.4f, 5)
+  var stepsPerMM = Vec4(80, 80, 1600, 95.2)
   var ticksPerSecond: Int = 30000
 
-  var pos = Vector4D.Zero
-  var realPos = Vector4D.Zero
-  var offset = Vector4D.Zero
+  var pos = Vec4.Zero
+  var realPos = Vec4.Zero
+  var offset = Vec4.Zero
   var lastStamp = -1.0
   var vel = 0.0
   var zoomScale = 4.0
   var keysDown = Set[String]()
   var isMouseDown = false
-  var lastMousePos = Vector4D.Zero
+  var lastMousePos = Vec4.Zero
   var minX = 10000000.0
   var maxX = 0.0
   var minY = 10000000.0
@@ -100,7 +100,7 @@ object WebPlayer extends js.JSApp {
   def mouseUp(event: dom.MouseEvent): Unit = isMouseDown = false
 
   def mouseMove(event: dom.MouseEvent): Unit = {
-    val newMousePos = Vector4D.X * event.screenX + Vector4D.Y * event.screenY
+    val newMousePos = Vec4.X * event.screenX + Vec4.Y * event.screenY
 
     if(isMouseDown) {
       val delta = newMousePos - lastMousePos
@@ -113,13 +113,13 @@ object WebPlayer extends js.JSApp {
 
   def processKey(key: String, dts: Double): Unit = key match {
     case "ArrowUp" | "w" =>
-      offset += Vector4D.Y * offsetMoveSpeed * dts
+      offset += Vec4.Y * offsetMoveSpeed * dts
     case "ArrowDown" | "s" =>
-      offset -= Vector4D.Y * offsetMoveSpeed * dts
+      offset -= Vec4.Y * offsetMoveSpeed * dts
     case "ArrowLeft" | "a" =>
-      offset += Vector4D.X * offsetMoveSpeed * dts
+      offset += Vec4.X * offsetMoveSpeed * dts
     case "ArrowRight" | "d"=>
-      offset -= Vector4D.X * offsetMoveSpeed * dts
+      offset -= Vec4.X * offsetMoveSpeed * dts
     case "+" | "=" =>
       zoomScale += zoomSpeed * dts
     case "-" =>
@@ -142,8 +142,8 @@ object WebPlayer extends js.JSApp {
 
     gcodeItr = Some(CartesianDeltaIterator(itr0))
     ticks = 0
-    pos = Vector4D.Zero
-    realPos = Vector4D.Zero
+    pos = Vec4.Zero
+    realPos = Vec4.Zero
   }
 
   def prettyDouble(x: Double): String =
@@ -231,7 +231,7 @@ object WebPlayer extends js.JSApp {
       gcodeItr.get.next() match {
         case Left(delta) =>
           pos += delta
-          realPos = Vector4D(
+          realPos = Vec4(
             pos.x / stepsPerMM.x,
             pos.y / stepsPerMM.y,
             pos.z / stepsPerMM.z,

@@ -17,7 +17,7 @@
 package com.colingodsey.stepd.planner
 
 import com.colingodsey.stepd.GCode.SetPos
-import com.colingodsey.stepd.Math.Vector4D
+import com.colingodsey.stepd.Math.{Vec4, Epsilon}
 
 object StepProcessor {
   final val BytesPerChunk = 256
@@ -27,13 +27,13 @@ object StepProcessor {
   final val BlocksPerChunk = BytesPerChunk / BytesPerSegment
   final val StepsPerChunk = BlocksPerChunk * StepsPerSegment
 
-  case class SyncPos(pos: Vector4D)
+  case class SyncPos(pos: Vec4)
 }
 
 trait StepProcessor {
   import StepProcessor._
 
-  def stepsPerMM: Vector4D
+  def stepsPerMM: Vec4
   def ticksPerSecond: Int
   def leveling: MeshLevelingReader
 
@@ -46,7 +46,7 @@ trait StepProcessor {
 
   var currentChunk = new Array[Byte](BytesPerChunk)
   var chunkIndex = 0
-  var lastPos = Vector4D.Zero
+  var lastPos = Vec4.Zero
 
   //stats
   def recordSplit(axis: Int): Unit
@@ -125,15 +125,24 @@ trait StepProcessor {
   }
 
   def process(trap: Trapezoid): Unit = {
-    val iter = trap.posIterator(ticksPerSecond / StepsPerSegment)
+    val iter = trap.posIterator(ticksPerSecond.toDouble / StepsPerSegment)
+    //val dt = StepsPerSegment.toDouble / ticksPerSecond
+    val dt = 1.0 / ticksPerSecond
 
+    val veMax = trap.move.v.e
+
+    //val doesStop = trap.frEnd < Epsilon.e
+
+    //run at actual tick rate
     for(pos <- iter) {
+
       val zOffset = leveling.getOffset(pos.x, pos.y)
+      val eOffset = pos.e
 
       val stepPosXDest = (pos.x             * stepsPerMM.x).round
       val stepPosYDest = (pos.y             * stepsPerMM.y).round
       val stepPosZDest = ((pos.z + zOffset) * stepsPerMM.z).round
-      val stepPosEDest = (pos.e             * stepsPerMM.e).round
+      val stepPosEDest = ((pos.e + eOffset) * stepsPerMM.e).round
 
       val dx = stepPosXDest - stepPosX
       val dy = stepPosYDest - stepPosY
@@ -142,7 +151,6 @@ trait StepProcessor {
 
       processMove(dx.toInt, dy.toInt, dz.toInt, de.toInt)
 
-      //lastPos = pos
       stepPosX = stepPosXDest
       stepPosY = stepPosYDest
       stepPosZ = stepPosZDest

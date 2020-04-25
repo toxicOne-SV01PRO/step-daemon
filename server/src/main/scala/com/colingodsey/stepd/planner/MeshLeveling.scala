@@ -22,16 +22,17 @@ import java.io.File
 import javax.imageio.ImageIO
 
 import scala.concurrent.blocking
-import com.colingodsey.logos.collections.{Epsilon, Vec2, Vec3}
+
 import org.apache.commons.math3.analysis.interpolation.{BicubicInterpolator, PiecewiseBicubicSplineInterpolator}
-import json._
+
+import com.colingodsey.stepd.Math._
 
 object MeshLeveling {
   object OutputLine {
     def unapply(arg: String): Option[Point] = parseLine(arg)
   }
 
-  @accessor case class Point(x: Double, y: Double, offset: Double) {
+  case class Point(x: Double, y: Double, offset: Double) {
     def vec = Vec3(x, y, offset)
   }
 
@@ -154,7 +155,6 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
     val closest = getClosestPoint(x, y)
 
     //solve for d and n using the closest point
-    //val n = calculateNormal(closest)
     val n = surfaceNormal
     val d = closest.vec * n
 
@@ -164,7 +164,7 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
   }
 
   def averageNormal = {
-    var accumN = Vec3.zero
+    var accumN = Vec3.Zero
     var totalN = 0.0
 
     for(a <- points.iterator) {
@@ -189,9 +189,11 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
     (total.reduceLeft(_ + _) / total.length.toDouble).normal
   }
 
+  def vec3To2(v: Vec3) = Vec2(v.x, v.y)
+
   def calculateNormal(a: Vec3, b: Vec3, c: Vec3): Option[Vec3] = {
-    val n2d1 = (b - a).to[Vec2]
-    val n2d2 = (c - a).to[Vec2]
+    val n2d1 = vec3To2(b - a)
+    val n2d2 = vec3To2(c - a)
     val n1 = (b - a).normal
     val n2 = (c - a).normal
 
