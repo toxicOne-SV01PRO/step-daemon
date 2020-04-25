@@ -22,15 +22,7 @@ case class PlannerConfig(
                           accel: Vec4,
                           jerk: Vec4,
                           stepsPerMM: Vec4,
-                          ticksPerSecond: Int,
-                          filAdvance: FilAdvance
-)
-
-case class FilAdvance(
-    k: Double,
-    m: Double,
-    ζ: Double,
-    vMax: Double
+                          ticksPerSecond: Int
 )
 
 case class DeviceConfig(

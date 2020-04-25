@@ -56,6 +56,11 @@ def chunk -> gcode_c(ActorRef, chunk). ActorRef could be Future for deathwatch?
  */
 
 object ChunkManagerActor {
+  val maxGCodeQueue = 4
+  val retryCooldown = 30.millis
+
+  val testFailure = false
+
   object PageState {
     case object Free extends PageState(0)
     case object Writing extends PageState(1)
@@ -71,9 +76,8 @@ object ChunkManagerActor {
       Free -> Set(Free),
       // concurrency may produce false "free" when we start writing
       Writing -> Set(Ok, Fail, Writing),
-      // Ok -> Writing allowed when re-writing a failed page
-      Ok -> Set(Ok, Free, Writing),
-      Fail -> Set(Ok, Fail, Writing)
+      Ok -> Set(Ok, Free),
+      Fail -> Set(Fail, Free)
     )
 
     val ValidTransitions: Set[(PageState, PageState)] = for {
@@ -87,14 +91,13 @@ object ChunkManagerActor {
   }
   sealed abstract class PageState(val id: Int)
 
-  val maxGCodeQueue = 4
-  val retryCooldown = 30.millis
-
-  val testFailure = false
+  case object HealthCheck
 }
 
-class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with Stash with ActorLogging with Pipeline.Terminator {
+class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with Stash
+    with ActorLogging with Pipeline.Terminator with Timers {
   import ChunkManagerActor._
+  import context.dispatcher
 
   //Queue items that may depend on a page being written
   val queue = mutable.Queue[AnyRef]()
@@ -102,9 +105,11 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   //This is the host-authority page state
   var pageStates = Map[Int, PageState]().withDefaultValue(PageState.Free)
   var pendingPages = Map[Int, Chunk]()
-  var resendDeadline = Map[Int, Deadline]().withDefaultValue(Deadline.now)
+  var lastSent = Deadline.now
 
   var pendingCommands = 0
+
+  //TODO: needs a guard that watches for potentially, like blocking transmit but still in fail
 
   // the queue is blocked waiting on a needed chunk transfer
   def canTransmitNext = queue.headOption match {
@@ -133,42 +138,33 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
   def getPageState(x: Chunk): PageState = pageStates(getPageId(x))
 
+  def writePage(page: Int) = {
+    require(pageStates(page) != PageState.Writing)
+
+    // set write flag eagerly as we can't transition back to free
+    pageStates += page -> PageState.Writing
+
+    log.debug("writing page {}", page)
+
+    val testCorrupt = testFailure && math.random() < 0.05
+    gcodeSerial ! LineSerial.Bytes(pendingPages(page).produceBytes(page, testCorrupt))
+  }
+
   def addPage(x: Chunk) = {
     val page = nextFreePage
+
+    require(!pendingPages.contains(page), "trying to replace pending page!")
 
     queue += x
     pendingPages += page -> x
     writePage(page)
   }
 
-  def writePageRaw(page: Int) = {
-    val testCorrupt = testFailure && math.random() < 0.05
-    gcodeSerial ! LineSerial.Bytes(pendingPages(page).produceBytes(page, testCorrupt))
-  }
-
-  def writePage(page: Int) = {
-    require(pageStates(page) != PageState.Writing)
-
-    // set write flag eagerly, can't transition back to free
-    pageStates += page -> PageState.Writing
-
-    log.debug("writing page {}", page)
-
-    writePageRaw(page)
-  }
-
-  def resendFailedPages(): Unit = pageStates foreach {
-    case (page, PageState.Fail) if resendDeadline(page).isOverdue() =>
-      log.warning("Resending failed page {}", page)
-      resendDeadline += page -> retryCooldown.fromNow
-      writePageRaw(page)
-    case _ =>
-  }
-
   def sendGCodeCommand(cmd: Command): Unit = {
     gcodeSerial ! SerialGCode.Command(cmd.raw.line)
 
     pendingCommands += 1
+    lastSent = Deadline.now
   }
 
   def drainPending(): Unit = while (canTransmitNext) queue.removeHead() match {
@@ -181,6 +177,11 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     case x => sys.error("unexpected queued item " + x)
   }
 
+  def sendPageUnlock(page: Int) = {
+    val bytes = Chunk.getUnlockPageBytes(page)
+    gcodeSerial ! LineSerial.Bytes(bytes)
+  }
+
   def updatePageState(page: Int, state: PageState): Unit = {
     val curState = pageStates(page)
     val trans = curState -> state
@@ -188,11 +189,21 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     if (PageState isValidTransition trans) {
       pageStates += page -> state
 
-      if (state == PageState.Free)
-        pendingPages -= page
-
       if (curState != state) {
         log.debug("page {} transitioned from {} to {}", page, curState, state)
+      }
+
+      if (trans == (PageState.Ok, PageState.Free))
+        pendingPages -= page
+
+      if (trans == (PageState.Fail, PageState.Free)) {
+        log.debug("Resending failed page {}", page)
+        writePage(page)
+      }
+
+      if (trans == (PageState.Writing, PageState.Fail)) {
+        log.warning("Page {} failed to write", page)
+        sendPageUnlock(page)
       }
     } else if (trans != (PageState.Writing, PageState.Free)) {
       log.warning("Bad state transition for {}: {}", page, trans)
@@ -226,9 +237,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
     case LineSerial.ControlResponse(bytes) =>
       updatePageState(bytes)
-      resendFailedPages()
       drainPending()
-      // if (!shouldStashCommands)
       unstashAll()
 
     //waiting on some free pages
@@ -256,13 +265,29 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
       unstashAll()
       drainPending()
+
+    case HealthCheck if shouldStashCommands =>
+      def pendingPageId = queue.headOption match {
+        case Some(x: Chunk) => Some(getPageId(x))
+        case _ => None
+      }
+
+      if ((Deadline.now - lastSent) > 2.seconds) {
+        log.error(s"Pipeline has stalled out! " +
+          s"pageAvailable: $pageAvailable waitingCommands: $waitingCommands\n" +
+          s"queueSize: ${queue.size} pendingPageId: $pendingPageId\n " +
+          s"pageStates: $pageStates")
+        context.parent ! PoisonPill
+      }
   }
 
   def waitStart: Receive = {
     case LineSerial.Response(str) if str.startsWith("setup_complete") =>
       context become receive
 
-      log info "starting"
+      timers.startTimerAtFixedRate(self, HealthCheck, 1.second)
+
+      log.info("starting " + self.path.toStringWithoutAddress)
 
       unstashAll()
     case LineSerial.Response(str) =>
@@ -276,13 +301,6 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
     context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
     context.system.eventStream.subscribe(self, classOf[LineSerial.ControlResponse])
-
-    implicit def ec = context.dispatcher
-    context.system.scheduler.scheduleWithFixedDelay(1.seconds, 5.seconds) { () =>
-      //TEST!!!!
-      log.info(s"pageAvailable $pageAvailable")
-      log.info(s"waitingCommands $waitingCommands")
-    }
 
     context become waitStart
   }

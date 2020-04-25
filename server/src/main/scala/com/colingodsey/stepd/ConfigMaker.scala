@@ -19,7 +19,7 @@ package com.colingodsey.stepd
 import java.io.File
 
 import com.colingodsey.stepd.Math._
-import com.colingodsey.stepd.planner.{DeviceConfig, FilAdvance, MeshLevelingConfig, PlannerConfig}
+import com.colingodsey.stepd.planner.{DeviceConfig, MeshLevelingConfig, PlannerConfig}
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.jdk.CollectionConverters._
@@ -43,13 +43,7 @@ object ConfigMaker {
       accel = Vec4(accel(_)),
       jerk = Vec4(jerk(_)),
       stepsPerMM = Vec4(stepsPerMM(_)),
-      ticksPerSecond = planner.getInt("ticks-per-second"),
-      filAdvance = FilAdvance(
-        m = fa.getDouble("m"),
-        k = fa.getDouble("k"),
-        ζ = fa.getDouble("ζ"),
-        vMax = fa.getDouble("v-max")
-      )
+      ticksPerSecond = planner.getInt("ticks-per-second")
     )
   }
 

@@ -71,18 +71,20 @@ object Serial {
 
     //TODO: add notify for sleep?
     override def run(): Unit = {
-      while(!shouldClose.get) if(shouldRead.get) {
-        val firstByte = Option(port readBytes 1) getOrElse Array.empty
+      try {
+        while (!shouldClose.get) if (shouldRead.get) {
+          val firstByte = Option(port readBytes 1) getOrElse Array.empty
 
-        val toRead = math.min(port.getInputBufferBytesCount, SerialReadSize)
+          val toRead = math.min(port.getInputBufferBytesCount, SerialReadSize)
 
-        val remainingBytes = Option(port readBytes toRead) getOrElse Array.empty
-        val data: ByteString = ByteString(firstByte) ++ ByteString(remainingBytes)
+          val remainingBytes = Option(port readBytes toRead) getOrElse Array.empty
+          val data: ByteString = ByteString(firstByte) ++ ByteString(remainingBytes)
 
-        self ! data
-      } else synchronized(wait(1)) //wait 10ms or until notify
-
-      port.closePort()
+          self ! data
+        } else synchronized(wait(10)) //wait 10ms or until notify
+      } finally {
+        self ! PoisonPill
+      }
     }
   }
 
@@ -119,6 +121,12 @@ object Serial {
         val wrote = blocking(port writeBytes dat.toArray)
 
         require(wrote, "failed write")
+    }
+
+    override def postStop(): Unit = {
+      super.postStop()
+      blocking(port writeBytes ByteString("\r\nM112\r\n").toArray)
+      port.closePort()
     }
   }
 }

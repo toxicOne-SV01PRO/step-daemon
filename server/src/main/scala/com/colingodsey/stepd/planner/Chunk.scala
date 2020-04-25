@@ -28,6 +28,11 @@ object Chunk {
 
   def apply(bytes: Seq[Byte]): Chunk =
     Chunk(ByteString(bytes: _*))
+
+  def getUnlockPageBytes(idx: Int) = {
+    val idxByte = ByteString(idx.toByte)
+    chunkHeader ++ idxByte ++ ByteString(0.toByte) ++ chunkFooter
+  }
 }
 
 case class Chunk(rawBytes: ByteString) {

@@ -30,6 +30,9 @@ object SocatProxy {
   val deviceBase = "/tmp/pty-stepd"
   val clientDevice = deviceBase + "-client"
   val serverDevice = deviceBase
+
+  case class LineIn(str: String)
+  case class PTY(dev: String)
 }
 
 class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeline with LineParser with GCodeParser {
@@ -41,9 +44,6 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
   var nLinked = 0
   var serialRef: Option[ActorRef] = None
-
-  case class LineIn(str: String)
-  case class PTY(dev: String)
 
   def processCommand(cmd: Command): Unit = {
     sendDown(cmd)

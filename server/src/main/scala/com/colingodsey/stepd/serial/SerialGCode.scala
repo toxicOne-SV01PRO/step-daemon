@@ -51,14 +51,7 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
   override def preStart(): Unit = {
     super.preStart()
 
-    //TODO: does this initial one ever respond with an OK?
     lineSerial ! Serial.Bytes(NumReset + "\r\n")
-
-    implicit def ec = context.dispatcher
-    context.system.scheduler.scheduleWithFixedDelay(1.seconds, 5.seconds) { () =>
-      //TEST!!!!
-      log.info(pending.toString)
-    }
   }
 
   def sendCommand(str: String) = {

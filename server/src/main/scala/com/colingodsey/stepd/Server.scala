@@ -21,11 +21,30 @@ import java.util.Scanner
 import akka.actor._
 import Math._
 import com.colingodsey.stepd.GCode.Command
+import com.colingodsey.stepd.Server.system
 import com.colingodsey.stepd.planner._
 import com.colingodsey.stepd.serial.{LineSerial, SerialGCode}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+
+class ServerActor extends Actor {
+  val gcodeSerial = context.actorOf(Props(classOf[SerialGCode], ConfigMaker.deviceConfig), name="gcode-serial")
+  val chunkManager = context.actorOf(Props(classOf[ChunkManagerActor], gcodeSerial, 5), name="chunk-manager")
+  val steps = context.actorOf(Props(classOf[StepProcessorActor], chunkManager, ConfigMaker.plannerConfig), name="steps")
+  val physics = context.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
+  val delta = context.actorOf(Props(classOf[DeltaProcessorActor], physics, false), name="delta")
+  val proxy = context.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
+  val bedlevel = context.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
+
+  def receive = PartialFunction.empty
+
+  override def postStop(): Unit = {
+    super.postStop()
+
+    system.terminate()
+  }
+}
 
 object Server extends App {
   //prevent AWT from opening a window
@@ -33,19 +52,7 @@ object Server extends App {
 
   val system = ActorSystem("stepd", ConfigMaker.config)
 
-  val gcodeSerial = system.actorOf(Props(classOf[SerialGCode], ConfigMaker.deviceConfig), name="gcode-serial")
-
-  val chunkManager = system.actorOf(Props(classOf[ChunkManagerActor], gcodeSerial, 5), name="chunk-manager")
-
-  val steps = system.actorOf(Props(classOf[StepProcessorActor], chunkManager, ConfigMaker.plannerConfig), name="steps")
-
-  val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
-
-  val delta = system.actorOf(Props(classOf[DeltaProcessorActor], physics, false), name="delta")
-
-  val proxy = system.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
-
-  val bedlevel = system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
+  val serverActor = system.actorOf(Props[ServerActor], name="server")
 
   sys.addShutdownHook {
     system.terminate()

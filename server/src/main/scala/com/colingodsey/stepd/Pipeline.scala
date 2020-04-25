@@ -36,13 +36,6 @@ trait Pipeline extends Actor with Stash with ActorLogging with Pipeline.Terminat
   var pending = 0
   var isWaiting = false
 
-  import scala.concurrent.duration._
-  implicit def __ec = context.dispatcher
-  context.system.scheduler.scheduleWithFixedDelay(1.seconds, 5.seconds) { () =>
-    //TEST!!!!
-    log.info(s"isWaiting $isWaiting")
-  }
-
   def next: ActorRef
 
   def maxPending = Pipeline.MaxPending
@@ -82,6 +75,11 @@ trait Pipeline extends Actor with Stash with ActorLogging with Pipeline.Terminat
       }
     case Status =>
     case _ => stash()
+  }
+
+  abstract override def postStop(): Unit = {
+    log.info(s"Stopping actor. isWaiting: $isWaiting")
+    super.postStop()
   }
 }
 

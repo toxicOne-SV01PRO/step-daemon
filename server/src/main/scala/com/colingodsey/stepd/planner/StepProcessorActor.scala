@@ -24,7 +24,6 @@ import com.colingodsey.stepd.GCode._
 class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepProcessor with Pipeline {
   var splits = new Array[Int](4)
   var hasSentSpeed = false
-  var filAdvanceK = cfg.filAdvance.k
 
   var leveling = MeshLevelingReader.Empty
 
@@ -80,12 +79,6 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
 
       flushChunk()
       sendDown(ZProbe)
-    /*case cmd @ LinearAdvance(Some(k)) =>
-      ack()
-      log.info(s"setting lin-advance k to $k")
-      filAdvanceK = k
-      linearAdvance.update()
-      sendDown(cmd)*/
 
     case cmd: Command if cmd.isGCommand =>
       ack()
