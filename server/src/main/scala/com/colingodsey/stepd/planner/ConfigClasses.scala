@@ -19,10 +19,11 @@ package com.colingodsey.stepd.planner
 import com.colingodsey.stepd.Math.Vec4
 
 case class PlannerConfig(
-                          accel: Vec4,
-                          jerk: Vec4,
-                          stepsPerMM: Vec4,
-                          ticksPerSecond: Int
+    accel: Vec4,
+    jerk: Vec4,
+    stepsPerMM: Vec4,
+    ticksPerSecond: Int,
+    format: StepProcessor.PageFormat
 )
 
 case class DeviceConfig(

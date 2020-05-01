@@ -23,8 +23,9 @@ object CartesianChunkIterator {
   type Response = Either[Array[Byte], GCode.Command]
 }
 
-abstract class CartesianChunkIterator(val gcode: String) extends LineParser with GCodeParser
-    with StepProcessor with DeltaProcessor with PhysicsProcessor with Iterator[CartesianChunkIterator.Response] {
+abstract class CartesianChunkIterator(val gcode: String, format: StepProcessor.PageFormat)
+      extends StepProcessor(format) with LineParser with GCodeParser with DeltaProcessor
+      with PhysicsProcessor with Iterator[CartesianChunkIterator.Response] {
   private val gcodeIterator = gcode.iterator
   private var responseList = LazyList[CartesianChunkIterator.Response]()
 
@@ -46,7 +47,7 @@ abstract class CartesianChunkIterator(val gcode: String) extends LineParser with
       responseList :+= Right(cmd)
   }
 
-  def processChunk(chunk: Array[Byte]): Unit =
+  def processChunk(chunk: Array[Byte], meta: StepProcessor.ChunkMeta): Unit =
     responseList :+= Left(chunk)
 
   def advanceData(): Unit = {

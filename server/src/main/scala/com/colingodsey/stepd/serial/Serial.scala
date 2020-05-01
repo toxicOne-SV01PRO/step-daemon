@@ -125,7 +125,8 @@ object Serial {
 
     override def postStop(): Unit = {
       super.postStop()
-      blocking(port writeBytes ByteString("\r\nM112\r\n").toArray)
+      //blocking(port writeBytes ByteString("\r\nM112\r\n").toArray)
+      blocking(port writeBytes ByteString("\r\nM108\r\n").toArray)
       port.closePort()
     }
   }

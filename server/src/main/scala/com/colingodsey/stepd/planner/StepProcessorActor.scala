@@ -20,8 +20,10 @@ import com.colingodsey.stepd.{Math, Pipeline}
 import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.stepd.GCode._
+import com.colingodsey.stepd.planner.StepProcessor.ChunkMeta
 
-class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepProcessor with Pipeline {
+class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig)
+    extends StepProcessor(cfg.format) with Pipeline {
   var splits = new Array[Int](4)
   var hasSentSpeed = false
 
@@ -39,15 +41,8 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   }
 
   //should move to chunk manager?
-  def processChunk(chunk: Array[Byte]): Unit = {
-    if(!hasSentSpeed) {
-      hasSentSpeed = true
-
-      sendDown(Raw("G6 S" + ticksPerSecond.toInt))
-    }
-
-    sendDown(Chunk(chunk))
-  }
+  def processChunk(chunk: Array[Byte], meta: ChunkMeta): Unit =
+    sendDown(Chunk(chunk, meta))
 
   def process(syncPos: StepProcessor.SyncPos): Unit =
     sendDown(syncPos)

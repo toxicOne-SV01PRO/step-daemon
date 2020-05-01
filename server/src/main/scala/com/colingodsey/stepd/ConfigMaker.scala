@@ -19,20 +19,20 @@ package com.colingodsey.stepd
 import java.io.File
 
 import com.colingodsey.stepd.Math._
-import com.colingodsey.stepd.planner.{DeviceConfig, MeshLevelingConfig, PlannerConfig}
+import com.colingodsey.stepd.planner.{DeviceConfig, MeshLevelingConfig, PlannerConfig, StepProcessor}
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.jdk.CollectionConverters._
 
 object ConfigMaker {
-  val config = ConfigFactory.parseFile(new File("./config.conf")) withFallback
+  lazy val config = ConfigFactory.parseFile(new File("./config.conf")) withFallback
       ConfigFactory.load()
 
-  val stepd = config.getConfig("com.colingodsey.stepd")
-  val planner = stepd.getConfig("planner")
-  val fa = stepd.getConfig("fil-advance")
-  val device = stepd.getConfig("device")
-  val bed = stepd.getConfig("bed")
+  lazy val stepd = config.getConfig("com.colingodsey.stepd")
+  lazy val planner = stepd.getConfig("planner")
+  lazy val fa = stepd.getConfig("fil-advance")
+  lazy val device = stepd.getConfig("device")
+  lazy val bed = stepd.getConfig("bed")
 
   def plannerConfig = {
     val accel = planner.getDoubleList("acceleration").asScala
@@ -43,7 +43,12 @@ object ConfigMaker {
       accel = Vec4(accel(_)),
       jerk = Vec4(jerk(_)),
       stepsPerMM = Vec4(stepsPerMM(_)),
-      ticksPerSecond = planner.getInt("ticks-per-second")
+      ticksPerSecond = planner.getInt("ticks-per-second"),
+      format = planner.getString("format").toLowerCase match {
+        case "sp_4x4d_128" => StepProcessor.PageFormat.SP_4x4D_128
+        case "sp_4x1_512" => StepProcessor.PageFormat.SP_4x1_512
+        case x => sys.error("Unknown pge format " + x)
+      }
     )
   }
 

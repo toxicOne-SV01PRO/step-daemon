@@ -17,6 +17,7 @@
 package com.colingodsey.stepd
 
 import com.colingodsey.stepd.Math.Vec4
+import com.colingodsey.stepd.planner.StepProcessor
 import utest._
 
 object CartesianTest extends TestSuite {
@@ -25,7 +26,7 @@ object CartesianTest extends TestSuite {
     scala.io.Source.fromInputStream(stream).getLines.mkString("\r\n")
   }
 
-  class FrogIterator extends CartesianChunkIterator(frogGCode) {
+  class FrogIterator extends CartesianChunkIterator(frogGCode, StepProcessor.PageFormat.SP_4x4D_128) {
     val acc = Vec4(2000, 1500, 100, 10000)
     val jerk = Vec4(15, 10, 0.4f, 5)
     val stepsPerMM = Vec4(80, 80, 1600, 95.2)

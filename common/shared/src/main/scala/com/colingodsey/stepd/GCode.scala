@@ -51,8 +51,30 @@ object GCode {
     def hasPart(ident: Char) = getPart(ident).isDefined
   }
 
-  case class GDirectMove(chunkIdx: Int) extends Command {
-    val raw = Raw(s"G6 I$chunkIdx")
+  case class GDirectMove(index: Option[Int] = None,
+                         speed: Option[Int] = None,
+                         steps: Option[Int] = None,
+                         xDir: Option[Boolean] = None,
+                         yDir: Option[Boolean] = None,
+                         zDir: Option[Boolean] = None,
+                         eDir: Option[Boolean] = None) extends Command {
+
+    def dirString(c: Char, value: Option[Boolean]) = value match {
+      case Some(true) => s" ${c}1"
+      case Some(false) => s" ${c}0"
+      case _ => ""
+    }
+
+    val raw = Raw {
+      "G6" +
+        index.map(x => s" I$x").getOrElse("") +
+        speed.map(x => s" S$x").getOrElse("") +
+        steps.map(x => s" N$x").getOrElse("") +
+        dirString('X', xDir) +
+        dirString('Y', yDir) +
+        dirString('Z', zDir) +
+        dirString('E', eDir)
+    }
 
     def isGCommand = false
   }

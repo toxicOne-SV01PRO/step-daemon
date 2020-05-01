@@ -56,10 +56,11 @@ def chunk -> gcode_c(ActorRef, chunk). ActorRef could be Future for deathwatch?
  */
 
 object ChunkManagerActor {
-  val maxGCodeQueue = 4
-  val retryCooldown = 30.millis
+  val MaxGCodeQueue = 4
+  val RetryCooldown = 30.millis
+  val NumPages = 16
 
-  val testFailure = false
+  val TestFailure = false
 
   object PageState {
     case object Free extends PageState(0)
@@ -91,7 +92,10 @@ object ChunkManagerActor {
   }
   sealed abstract class PageState(val id: Int)
 
+  case class StagedChunk(page: Int)
+
   case object HealthCheck
+  case object Stats
 }
 
 class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with Stash
@@ -103,40 +107,32 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   val queue = mutable.Queue[AnyRef]()
 
   //This is the host-authority page state
-  var pageStates = Map[Int, PageState]().withDefaultValue(PageState.Free)
-  var pendingPages = Map[Int, Chunk]()
+  var pageStates = Map[Int, PageState]()
+  var pageChunks = Map[Int, Chunk]()
   var lastSent = Deadline.now
 
   var pendingCommands = 0
+  var sentChunks = 0
+  var nextFreePage = 0
 
-  //TODO: needs a guard that watches for potentially, like blocking transmit but still in fail
+  var lastReportedSpeed = 0
+  var lastReportedDirection = Seq(false, false, false, false)
 
-  // the queue is blocked waiting on a needed chunk transfer
-  def canTransmitNext = queue.headOption match {
-    case Some(x: Chunk) => getPageState(x) == PageState.Ok
-    case None => false
-    case _ => true
-  }
+  //TODO: needs a guard that watches for a page blocking transmit if in fail state
 
-  def pageAvailable = pageStates.exists(_._2 == PageState.Free)
+  def pageAvailable = pageStates(nextFreePage) == PageState.Free
 
-  def waitingCommands = pendingCommands >= maxGCodeQueue
+  def waitingCommands = pendingCommands >= MaxGCodeQueue
 
   def shouldStashCommands = !pageAvailable || waitingCommands
 
-  def nextFreePage = {
-    require(pageAvailable)
-
-    pageStates.filter(_._2 == PageState.Free).head._1
+  // the queue is blocked waiting on a needed chunk transfer
+  def canTransmitNext = queue.headOption match {
+    case Some(StagedChunk(page)) => pageStates(page) == PageState.Ok
+    case Some(_: Command) => !waitingCommands
+    case Some(_) => sys.error("something random in our queue")
+    case None => false
   }
-
-  def getPageId(x: Chunk) =
-    pendingPages.filter(_._2 == x).headOption match {
-      case Some((id, _)) => id
-      case None => sys.error("chunk was not queued yet!")
-    }
-
-  def getPageState(x: Chunk): PageState = pageStates(getPageId(x))
 
   def writePage(page: Int) = {
     require(pageStates(page) != PageState.Writing)
@@ -144,19 +140,23 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     // set write flag eagerly as we can't transition back to free
     pageStates += page -> PageState.Writing
 
+    sentChunks += 1
     log.debug("writing page {}", page)
 
-    val testCorrupt = testFailure && math.random() < 0.05
-    gcodeSerial ! LineSerial.Bytes(pendingPages(page).produceBytes(page, testCorrupt))
+    val testCorrupt = TestFailure && math.random() < 0.05
+    gcodeSerial ! LineSerial.Bytes(pageChunks(page).produceBytes(page, testCorrupt))
   }
 
   def addPage(x: Chunk) = {
     val page = nextFreePage
 
-    require(!pendingPages.contains(page), "trying to replace pending page!")
+    nextFreePage += 1
+    if (nextFreePage >= NumPages) nextFreePage = 0
 
-    queue += x
-    pendingPages += page -> x
+    require(!pageChunks.contains(page), s"trying to replace pending page $page")
+
+    queue += StagedChunk(page)
+    pageChunks += page -> x
     writePage(page)
   }
 
@@ -167,11 +167,38 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     lastSent = Deadline.now
   }
 
+  def getDirectionBit(axis: Int, meta: StepProcessor.ChunkMeta) =
+    if (lastReportedDirection(axis) != meta.directions(axis))
+      Some(meta.directions(axis))
+    else None
+
   def drainPending(): Unit = while (canTransmitNext) queue.removeHead() match {
-    case x: Chunk =>
-      val page = getPageId(x)
+    case StagedChunk(page) =>
+      val chunk = pageChunks(page)
+
+      val speed = if (lastReportedSpeed != chunk.meta.speed) {
+        lastReportedSpeed = chunk.meta.speed
+        Some(lastReportedSpeed)
+      } else None
+
+      val xDir = getDirectionBit(0, chunk.meta)
+      val yDir = getDirectionBit(1, chunk.meta)
+      val zDir = getDirectionBit(2, chunk.meta)
+      val eDir = getDirectionBit(3, chunk.meta)
+      lastReportedDirection = chunk.meta.directions
+
+      val move = GDirectMove(
+        index=Some(page),
+        speed=speed,
+        steps=chunk.meta.steps,
+        xDir=xDir,
+        yDir=yDir,
+        zDir=zDir,
+        eDir=eDir
+      )
+
       log.debug("G6 for {}", page)
-      sendGCodeCommand(GDirectMove(page))
+      sendGCodeCommand(move)
     case x: Command =>
       sendGCodeCommand(x)
     case x => sys.error("unexpected queued item " + x)
@@ -194,10 +221,10 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
       }
 
       if (trans == (PageState.Ok, PageState.Free))
-        pendingPages -= page
+        pageChunks -= page
 
       if (trans == (PageState.Fail, PageState.Free)) {
-        log.debug("Resending failed page {}", page)
+        log.debug("Failed page {} unlocked", page)
         writePage(page)
       }
 
@@ -213,7 +240,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   def updatePageState(bytes: ByteString): Unit = {
     require(bytes.length == 5)
 
-    val testCorruption = if (testFailure && math.random() < 0.05) 1 else 0
+    val testCorruption = if (TestFailure && math.random() < 0.05) 1 else 0
 
     val checksum = bytes(4)
     val crc = (bytes.slice(0, 4).foldLeft(0)(_ ^ _) & 0xFF).toByte + testCorruption.toByte
@@ -229,9 +256,14 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     } updatePageState(pageIdx, state)
   }
 
+  /*
+  TODO: need to start filling pages in numeric order, recognize fail state
+  of getting written -> ok from a later page without getting one for the early page
+   */
+
   def receive = {
     case LineSerial.Response(str) if str.startsWith("ok N") =>
-      log.info("ok: {}", str)
+      log.debug("ok: {}", str)
     case LineSerial.Response(str) =>
       log.info("recv: {}", str)
 
@@ -246,13 +278,12 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
     case x: Chunk =>
       ack()
-
-      log debug "adding chunk"
       addPage(x)
 
     case x: Command =>
       ack()
       queue += x
+      drainPending()
 
     case _: StepProcessor.SyncPos =>
       ack()
@@ -263,37 +294,59 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
       log.debug("ok: {}", cmd)
 
-      unstashAll()
       drainPending()
+      unstashAll()
 
     case HealthCheck if shouldStashCommands =>
-      def pendingPageId = queue.headOption match {
-        case Some(x: Chunk) => Some(getPageId(x))
-        case _ => None
+      if ((Deadline.now - lastSent) > 2.seconds) {
+        log.error(s"Pipeline has stalled out! " + stateString)
+        context.parent ! PoisonPill
       }
 
-      if ((Deadline.now - lastSent) > 2.seconds) {
-        log.error(s"Pipeline has stalled out! " +
-          s"pageAvailable: $pageAvailable waitingCommands: $waitingCommands\n" +
-          s"queueSize: ${queue.size} pendingPageId: $pendingPageId\n " +
-          s"pageStates: $pageStates")
-        context.parent ! PoisonPill
+    case Stats =>
+      val chunksPerSec = (sentChunks * 1000.0 / 5.0).toInt / 1000.0
+
+      sentChunks = 0
+
+      if (chunksPerSec > 0) {
+        log.info("Current chunks/s: {}", chunksPerSec)
       }
   }
 
+  def stateString = {
+    def pendingPageId = queue.headOption match {
+      case Some(StagedChunk(x)) => Some(x)
+      case _ => None
+    }
+
+    s"pageAvailable: $pageAvailable waitingCommands: $waitingCommands\n" +
+      s"queueSize: ${queue.size} pendingPageId: $pendingPageId\n" +
+      s"pageStates: $pageStates"
+  }
+
+
   def waitStart: Receive = {
-    case LineSerial.Response(str) if str.startsWith("setup_complete") =>
+    case LineSerial.Response(str) if str.startsWith("pages_ready") =>
       context become receive
 
-      timers.startTimerAtFixedRate(self, HealthCheck, 1.second)
+      timers.startTimerAtFixedRate("health", HealthCheck, 1.second)
+      timers.startTimerAtFixedRate("stats", Stats, 5.seconds)
 
       log.info("starting " + self.path.toStringWithoutAddress)
+
+      for (i <- 0 until NumPages)
+        pageStates += i -> PageState.Free
 
       unstashAll()
     case LineSerial.Response(str) =>
       log.info("recv: {}", str)
     case _ =>
       stash()
+  }
+
+  override def postStop(): Unit = {
+    log.info("Stopping: " + stateString)
+    super.postStop()
   }
 
   override def preStart(): Unit = {

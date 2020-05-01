@@ -33,7 +33,8 @@ object SerialGCode {
   type ControlResponse = LineSerial.ControlResponse
   val ControlResponse = LineSerial.ControlResponse
 
-  val MaxQueue = 3
+  val MaxQueue = 4
+  //val MaxQueue = 1
   val MaxIncr = 99
   val NumReset = "M110"
 }
@@ -93,7 +94,7 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
     case a @ Response(str) if str.startsWith("ok N") || str.startsWith("ok T") =>
       unstashAll()
 
-      log.info("ok: {}", str)
+      log.debug("ok: {}", str)
 
       if (str.startsWith("ok N")) {
         val n = str.drop(4).takeWhile(_ != ' ').toInt

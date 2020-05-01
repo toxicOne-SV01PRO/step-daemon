@@ -17,6 +17,7 @@
 package com.colingodsey.print3d.debug
 
 import java.util.Scanner
+
 import javafx.animation.AnimationTimer
 import javafx.application.Application
 import javafx.event.ActionEvent
@@ -28,7 +29,6 @@ import javafx.scene.layout.StackPane
 import javafx.scene.paint.Color
 import javafx.scene.shape.Circle
 import javafx.stage.Stage
-
 import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.print3d._
@@ -36,6 +36,7 @@ import com.colingodsey.stepd
 import com.colingodsey.stepd.GCode.{Command, SetPos}
 import com.colingodsey.stepd._
 import com.colingodsey.stepd.Math._
+import com.colingodsey.stepd.planner.StepProcessor.PageFormat
 import com.colingodsey.stepd.planner._
 
 import scala.concurrent.Await
@@ -230,10 +231,16 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
 
   val stepsPer = ConfigMaker.plannerConfig.stepsPerMM
   val ticksPerSecond = ConfigMaker.plannerConfig.ticksPerSecond
+  val format = ConfigMaker.plannerConfig.format
 
   var ticks = 0.0
   var idx = 0
+
   var curChunk: ByteString = null
+  var curChunkSteps = 0
+
+  var lastPageSpeed = ticksPerSecond
+  var lastDirection = Seq.empty[Boolean]
 
   var x = 0L
   var y = 0L
@@ -244,28 +251,51 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
 
   MovementProcessor.f = getPos(_)
 
+  def getDirectionScale(axis: Int) =
+    if (lastDirection(axis)) 1
+    else -1
+
   def takeStep(): Unit = {
-    val blockIdx = (idx >> 3) << 1
+    format match {
+      case PageFormat.SP_4x4D_128 =>
+        val blockIdx = (idx >> 3) << 1
 
-    val a = curChunk(blockIdx) & 0xFF
-    val b = curChunk(blockIdx + 1) & 0xFF
+        val a = curChunk(blockIdx) & 0xFF
+        val b = curChunk(blockIdx + 1) & 0xFF
 
-    val xRaw = (a & 0xF0) >> 4
-    val yRaw = a & 0xF
-    val zRaw = (b & 0xF0) >> 4
-    val eRaw = b & 0xF
+        val xRaw = (a & 0xF0) >> 4
+        val yRaw = a & 0xF
+        val zRaw = (b & 0xF0) >> 4
+        val eRaw = b & 0xF
 
-    x += xRaw - 7
-    y += yRaw - 7
-    z += zRaw - 7
-    e += eRaw - 7
+        x += xRaw - 7
+        y += yRaw - 7
+        z += zRaw - 7
+        e += eRaw - 7
+
+        idx += 8
+      case PageFormat.SP_4x1_512 =>
+        val byte = curChunk(idx >> 1) & 0xFF
+        val isLow = (idx & 0x1) == 0
+
+        val nibble = if(isLow) byte & 0xF else byte >> 4
+
+        val xRaw = (nibble >> 0) & 0x1
+        val yRaw = (nibble >> 1) & 0x1
+        val zRaw = (nibble >> 2) & 0x1
+        val eRaw = (nibble >> 3) & 0x1
+
+        x += xRaw * getDirectionScale(0)
+        y += yRaw * getDirectionScale(1)
+        z += zRaw * getDirectionScale(2)
+        e += eRaw * getDirectionScale(3)
+
+        idx += 1
+    }
 
     pos = Vec4(x / stepsPer.x, y / stepsPer.y, z / stepsPer.z, e / stepsPer.e)
 
-    //idx += 1
-    idx += 8
-
-    if(idx == StepProcessor.StepsPerChunk) {
+    if(idx == curChunkSteps) {
       idx = 0
       curChunk = null
 
@@ -276,7 +306,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
   def getPos(dt: Double): Option[Vec4] = {
     val x = pos
 
-    self ! Tick(dt * ticksPerSecond / StepProcessor.StepsPerSegment)
+    self ! Tick(dt * ticksPerSecond / format.StepsPerSegment)
 
     Some(x)
   }
@@ -290,10 +320,14 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
   }
 
   def receive: Receive = {
-    case Chunk(buff: ByteString) if curChunk == null =>
+    case Chunk(buff: ByteString, meta) if curChunk == null =>
       ack()
 
       curChunk = buff
+      curChunkSteps = meta.steps getOrElse format.StepsPerChunk
+
+      lastPageSpeed = meta.speed
+      lastDirection = meta.directions
 
       consumeBuffer()
     case Tick(x) =>
@@ -309,10 +343,10 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
       e = (setPos.e.getOrElse(pos.e) * stepsPer.e).round
 
       ack()
-    case setPos: SetPos =>
+    case _: SetPos =>
       stash()
 
-    case syncPos: StepProcessor.SyncPos =>
+    case _: StepProcessor.SyncPos =>
       ack()
 
     case _: Command =>

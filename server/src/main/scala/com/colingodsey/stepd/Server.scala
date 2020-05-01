@@ -37,6 +37,8 @@ class ServerActor extends Actor {
   val proxy = context.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
   val bedlevel = context.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
 
+  context watch gcodeSerial
+
   def receive = PartialFunction.empty
 
   override def postStop(): Unit = {

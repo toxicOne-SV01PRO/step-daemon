@@ -23,11 +23,11 @@ object Chunk {
   //Add a an extra line break or two incase a byte gets lost
   val chunkFooter = ByteString.fromString("\r\n") //ByteString.empty
 
-  def apply(bytes: Array[Byte]): Chunk =
-    Chunk(ByteString(bytes))
+  def apply(bytes: Array[Byte], meta: StepProcessor.ChunkMeta): Chunk =
+    Chunk(ByteString(bytes), meta)
 
-  def apply(bytes: Seq[Byte]): Chunk =
-    Chunk(ByteString(bytes: _*))
+  def apply(bytes: Seq[Byte], meta: StepProcessor.ChunkMeta): Chunk =
+    Chunk(ByteString(bytes), meta)
 
   def getUnlockPageBytes(idx: Int) = {
     val idxByte = ByteString(idx.toByte)
@@ -35,10 +35,10 @@ object Chunk {
   }
 }
 
-case class Chunk(rawBytes: ByteString) {
+case class Chunk(rawBytes: ByteString, meta: StepProcessor.ChunkMeta) {
   import Chunk._
 
-  require(rawBytes.length == StepProcessor.BytesPerChunk)
+  require(rawBytes.length == 256)
 
   def produceBytes(idx: Int, corrupt: Boolean = false): ByteString = {
     val testCorruption = if (corrupt) 1 else 0

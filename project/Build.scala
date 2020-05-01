@@ -18,14 +18,14 @@ import sbt.Keys._
 import sbt._
 
 import org.scalajs.sbtplugin.ScalaJSPlugin
-import ScalaJSPlugin.autoImport._
+import org.scalajs.sbtplugin.ScalaJSPlugin.autoImport._
 
-import com.lihaoyi.workbench.Plugin._
+import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport._
 
 import sbtassembly.AssemblyKeys._
 
 object Build {
-  val AkkaV = "2.4.14"
+  val AkkaV = "2.6.4"
 
   def buildSettings = Seq(
     name := "print-server",
@@ -33,28 +33,29 @@ object Build {
     publish := {},
     publishLocal := {},
 
-    scalaVersion in ThisBuild := "2.11.6",
-    version in ThisBuild <<= version in LocalRootProject,
+    version in ThisBuild ~= (version in LocalRootProject).transform,
 
-    resolvers in ThisBuild += "mvn repo" at "https://raw.githubusercontent.com/colinrgodsey/maven/master",
+    //resolvers in ThisBuild += "mvn repo" at "https://raw.githubusercontent.com/colinrgodsey/maven/master",
     resolvers in ThisBuild += "mmreleases" at "https://artifactory.mediamath.com/artifactory/libs-release-global",
     resolvers in ThisBuild += Resolver.sonatypeRepo("releases"),
     resolvers in ThisBuild += "sonatype-snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
     resolvers in ThisBuild += "apache-snapshots" at "https://repository.apache.org/content/repositories/snapshots",
 
-    scalacOptions in ThisBuild += "-language:dynamics",
+    scalacOptions in ThisBuild += "-language:dynamics"
 
-    libraryDependencies in ThisBuild += compilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+    //libraryDependencies in ThisBuild += compilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
   )
 
   def commonSettings = Seq(
     test in assembly := {},
 
-    libraryDependencies +=  "com.colingodsey" %%% "logos" % "0.8",
+    //libraryDependencies +=  "com.colingodsey" %%% "logos" % "0.8",
     //libraryDependencies += "com.colingodsey" %%% "logos-akkajs" %   "0.8",
-    libraryDependencies +=  "com.mediamath"   %%% "scala-json" % "1.0",
+    //libraryDependencies +=  "com.mediamath"   %%% "scala-json" % "1.0",
 
-    libraryDependencies +=  "com.lihaoyi"     %%% "utest" % "0.4.7" % "test",
+    libraryDependencies += "org.json4s" %% "json4s-native" % "3.6.7",
+
+    libraryDependencies += "com.lihaoyi"     %%% "utest" % "0.7.4" % "test",
 
     testFrameworks += new TestFramework("utest.runner.Framework")
   )
@@ -62,7 +63,7 @@ object Build {
   def jvmSettings = Seq(
     libraryDependencies += "com.typesafe.akka" %% "akka-actor" % AkkaV,
     libraryDependencies += "com.typesafe.akka" %% "akka-remote" % AkkaV,
-    libraryDependencies += "com.typesafe.akka" %% "akka-http" % "10.0.0",
+    libraryDependencies += "com.typesafe.akka" %% "akka-http" % "10.1.11",
 
     libraryDependencies += "org.apache.commons" % "commons-imaging" % "1.0-SNAPSHOT",
     libraryDependencies += "org.apache.commons" % "commons-math3" % "3.6.1",
@@ -76,8 +77,8 @@ object Build {
 
     //libraryDependencies += "eu.unicredit" %%% "akkajsactor" % "0.1.3-SNAPSHOT",
 
-    libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "0.9.2",
+    libraryDependencies += "org.scala-js" %%% "scalajs-dom" % "1.0.0"
 
-    skip in packageJSDependencies := false
+    //skip in packageJSDependencies := false
   )
 }
