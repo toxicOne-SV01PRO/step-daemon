@@ -28,8 +28,8 @@ in hot spots where precision can be leveraged safely.
   * Windows: must do a manual build with Cygwin
 * **Java JVM** for the desired machine.
   * MacOS: should be pre-installed
-  * Raspbian: *sudo apt-get install oracle-java8-jdk*
-  * Other Linux: Google around for java8 JDK installation instruction.
+  * Raspbian: *sudo apt-get install openjdk-11-jdk-headless*
+  * Other Linux: Google around for Java 11 JDK installation instruction.
 * **SBT** should come pre-bundled with stepd.
 
 ## Marlin Configuration ##
