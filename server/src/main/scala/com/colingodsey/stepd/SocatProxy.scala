@@ -46,7 +46,8 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
   var serialRef: Option[ActorRef] = None
 
   def processCommand(cmd: Command): Unit = {
-    sendDown(cmd)
+    if (cmd.raw.cmd != "M110")
+      sendDown(cmd)
   }
 
   def linkingDone(): Unit = {
@@ -78,6 +79,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
     case LineSerial.Response(str) if str.startsWith("ok N") =>
     //case LineSerial.Response(str) if str.startsWith("ok ") =>
+    case LineSerial.Response("start") => // block start from being sent
     case LineSerial.Response(str) if str.startsWith("!") =>
     case LineSerial.Response(str) =>
       serialRef.get ! LineSerial.Bytes(str)
@@ -85,7 +87,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
   }
 
   def linking: Receive = pipeline orElse {
-    case PTY(dev) if nLinked == 2 =>
+    case PTY(_) if nLinked == 2 =>
       sys.error("this is... unexpected")
     case PTY(dev) =>
       val target = if(nLinked == 0) clientDevice else serverDevice

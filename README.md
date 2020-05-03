@@ -47,6 +47,12 @@ in hot spots where precision can be leveraged safely.
 * Modify config settings as needed. Units are in mm.
 * Baud rate should match value configured in Marlin.
 
+## JVM Recommendations ##
+Works best with OpenJDK 11 and the following JVM arguments (4 cores or more):
+```bash
+-Xmx96M -XX:+UseG1GC -XX:ParallelGCThreads=4 -XX:ConcGCThreads=2 -XX:MaxGCPauseMillis=15
+```
+
 ## Usage ##
 
 * Build and run the server (from the base directory of the checkout):
