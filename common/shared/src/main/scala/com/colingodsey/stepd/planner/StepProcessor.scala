@@ -22,23 +22,34 @@ import com.colingodsey.stepd.Math.{Vec4, Epsilon}
 object StepProcessor {
   case class SyncPos(pos: Vec4)
 
-  case class ChunkMeta(steps: Option[Int], speed: Int, directions: Seq[Boolean])
+  case class ChunkMeta(speed: Int, writeSize: Boolean,
+      steps: Option[Int], directions: Seq[Boolean])
 
   object PageFormat {
     case object SP_4x4D_128 extends PageFormat {
+      val Directional = true
       val BytesPerChunk = 256
       val BytesPerSegment = 2
       val StepsPerSegment = 8
       val MaxStepsPerSegment = 7 //segment is 8 ticks, but has max of 7
-      val BlocksPerChunk = BytesPerChunk / BytesPerSegment
-      val StepsPerChunk = BlocksPerChunk * StepsPerSegment
+      val SegmentsPerChunk = BytesPerChunk / BytesPerSegment
+      val StepsPerChunk = SegmentsPerChunk * StepsPerSegment
+    }
+
+    case object SP_4x2_256 extends PageFormat {
+      val Directional = false
+      val BytesPerChunk = 256
+      val StepsPerChunk = 1024
+      val StepsPerSegment = 4
+      val MaxStepsPerSegment = 3
     }
 
     case object SP_4x1_512 extends PageFormat {
+      val Directional = false
       val BytesPerChunk = 256
+      val StepsPerChunk = 512
       val StepsPerSegment = 1
       val MaxStepsPerSegment = 1
-      val StepsPerChunk = BytesPerChunk * 2
     }
   }
   trait PageFormat {
@@ -46,6 +57,7 @@ object StepProcessor {
     val StepsPerSegment: Int
     val MaxStepsPerSegment: Int
     val StepsPerChunk: Int
+    val Directional: Boolean
   }
 }
 
@@ -94,6 +106,7 @@ abstract class StepProcessor(format: StepProcessor.PageFormat) {
   def getChunkSteps = {
     val steps = format match {
       case PageFormat.SP_4x4D_128 => chunkIndex / 2 * 8
+      case PageFormat.SP_4x2_256 => chunkIndex * 4
       case PageFormat.SP_4x1_512 => chunkIndex * 2 + (if (isLow) 0 else 1)
     }
 
@@ -103,13 +116,17 @@ abstract class StepProcessor(format: StepProcessor.PageFormat) {
   }
 
   def getChunkMeta = ChunkMeta(
-    steps = getChunkSteps,
     speed = ticksPerSecond,
+    writeSize = !format.Directional,
+    steps = getChunkSteps,
     directions = Seq(directionX, directionY, directionZ, directionE)
   )
 
   def flushChunk(): Unit = if(chunkIndex > 0 || !isLow) {
-    processChunk(currentChunk.clone(), getChunkMeta)
+    val size = math.min(chunkIndex + 1, 256)
+    val data = currentChunk.clone().take(size)
+
+    processChunk(data, getChunkMeta)
 
     chunkIndex = 0
     isLow = true
@@ -157,19 +174,31 @@ abstract class StepProcessor(format: StepProcessor.PageFormat) {
         chunkIndex += 1
         currentChunk(chunkIndex) = b.toByte
         chunkIndex += 1
+      case PageFormat.SP_4x2_256 =>
+        checkDirection(dX, dY, dZ, dE)
+
+        var byte: Int = 0
+
+        byte |= math.abs(dX) << 6
+        byte |= math.abs(dY) << 4
+        byte |= math.abs(dZ) << 2
+        byte |= math.abs(dE) << 0
+
+        currentChunk(chunkIndex) = byte.toByte
+        chunkIndex += 1
       case PageFormat.SP_4x1_512 =>
         checkDirection(dX, dY, dZ, dE)
 
         var byte: Int = if (isLow) 0 else currentChunk(chunkIndex)
         var nib: Int = 0
 
-        if (dX != 0) nib |= (1 << 0)
-        if (dY != 0) nib |= (1 << 1)
-        if (dZ != 0) nib |= (1 << 2)
-        if (dE != 0) nib |= (1 << 3)
+        if (dX != 0) nib |= (1 << 3)
+        if (dY != 0) nib |= (1 << 2)
+        if (dZ != 0) nib |= (1 << 1)
+        if (dE != 0) nib |= (1 << 0)
 
         if (isLow) byte |= nib
-        else byte |= (nib << 4)
+        else byte |= nib << 4
 
         currentChunk(chunkIndex) = byte.toByte
 

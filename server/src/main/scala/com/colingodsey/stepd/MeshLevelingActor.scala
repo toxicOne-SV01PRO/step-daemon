@@ -16,11 +16,11 @@
 
 package com.colingodsey.stepd
 
-import akka.actor._
+import java.io.FileNotFoundException
 
+import akka.actor._
 import com.colingodsey.stepd.planner.{MeshLeveling, MeshLevelingConfig, MeshLevelingReader}
 import com.colingodsey.stepd.serial.SerialGCode
-
 import org.json4s._
 import org.json4s.native.Serialization
 import org.json4s.native.Serialization.{read, write}
@@ -50,7 +50,6 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
     require(pointsBuffer.isEmpty)
 
     if(str.nonEmpty) {
-      //val points = str.parseJSON.toObject[Seq[MeshLeveling.Point]]
       val points = read[Seq[MeshLeveling.Point]](str)
 
       pointsBuffer ++= points
@@ -58,6 +57,8 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
       flushPoints()
     }
   } catch {
+    case _: FileNotFoundException =>
+      log.info("No leveling data found.")
     case NonFatal(t) =>
       log.error(t, "Failed to load " + configPath)
   }

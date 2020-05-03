@@ -112,11 +112,12 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   var lastSent = Deadline.now
 
   var pendingCommands = 0
-  var sentChunks = 0
+  var sentChunkBytes = 0
   var nextFreePage = 0
 
   var lastReportedSpeed = 0
   var lastReportedDirection = Seq(false, false, false, false)
+  var hasReportedDirection = false
 
   //TODO: needs a guard that watches for a page blocking transmit if in fail state
 
@@ -140,11 +141,17 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     // set write flag eagerly as we can't transition back to free
     pageStates += page -> PageState.Writing
 
-    sentChunks += 1
     log.debug("writing page {}", page)
 
     val testCorrupt = TestFailure && math.random() < 0.05
-    gcodeSerial ! LineSerial.Bytes(pageChunks(page).produceBytes(page, testCorrupt))
+
+    val chunk = pageChunks(page)
+
+    //log.info("{} {}", chunk.rawBytes.length, chunk.meta)
+
+    sentChunkBytes += chunk.rawBytes.length
+
+    gcodeSerial ! LineSerial.Bytes(chunk.produceBytes(page, testCorrupt))
   }
 
   def addPage(x: Chunk) = {
@@ -168,7 +175,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   }
 
   def getDirectionBit(axis: Int, meta: StepProcessor.ChunkMeta) =
-    if (lastReportedDirection(axis) != meta.directions(axis))
+    if (lastReportedDirection(axis) != meta.directions(axis) || !hasReportedDirection)
       Some(meta.directions(axis))
     else None
 
@@ -185,6 +192,8 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
       val yDir = getDirectionBit(1, chunk.meta)
       val zDir = getDirectionBit(2, chunk.meta)
       val eDir = getDirectionBit(3, chunk.meta)
+
+      hasReportedDirection = true
       lastReportedDirection = chunk.meta.directions
 
       val move = GDirectMove(
@@ -216,9 +225,8 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     if (PageState isValidTransition trans) {
       pageStates += page -> state
 
-      if (curState != state) {
+      if (curState != state)
         log.debug("page {} transitioned from {} to {}", page, curState, state)
-      }
 
       if (trans == (PageState.Ok, PageState.Free))
         pageChunks -= page
@@ -304,12 +312,12 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
       }
 
     case Stats =>
-      val chunksPerSec = (sentChunks * 1000.0 / 5.0).toInt / 1000.0
+      val bytesPerSec = (sentChunkBytes * 1000.0 / 5.0).toInt / 1000.0
 
-      sentChunks = 0
+      sentChunkBytes = 0
 
-      if (chunksPerSec > 0) {
-        log.info("Current chunks/s: {}", chunksPerSec)
+      if (bytesPerSec > 0) {
+        log.info("Chunk bytes/s: {}", bytesPerSec)
       }
   }
 

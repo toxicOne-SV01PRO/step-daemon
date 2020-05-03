@@ -38,14 +38,16 @@ object Chunk {
 case class Chunk(rawBytes: ByteString, meta: StepProcessor.ChunkMeta) {
   import Chunk._
 
-  require(rawBytes.length == 256)
-
   def produceBytes(idx: Int, corrupt: Boolean = false): ByteString = {
     val testCorruption = if (corrupt) 1 else 0
 
     val check = (rawBytes.foldLeft(0)(_ ^ _) & 0xFF) + testCorruption
     val idxByte = ByteString(idx.toByte)
+    val sizeBytes =
+      if (meta.writeSize) ByteString(rawBytes.length.toByte)
+      else ByteString.empty
 
-    chunkHeader ++ idxByte ++ rawBytes ++ ByteString(check.toByte) ++ chunkFooter
+    chunkHeader ++ idxByte ++ sizeBytes ++ rawBytes ++
+      ByteString(check.toByte) ++ chunkFooter
   }
 }

@@ -109,7 +109,7 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
   val pointMap = points.map(point => (point.x, point.y) -> point).toMap
 
   //TODO: produce std dev
-  val avgD = points.map(x => (x.vec * surfaceNormal)).sum / points.length.toDouble
+  val avgD = points.map(x => x.vec * surfaceNormal).sum / points.length.toDouble
 
   val function = {
     val values = Array.fill(sortX.length)(new Array[Double](sortY.length))
@@ -139,6 +139,8 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
       interpolator.interpolate(sortX.toArray, sortY.toArray, values)
     }
   }
+
+  def vec3To2(v: Vec3) = Vec2(v.x, v.y)
 
   def getSamplePoint(x: Double, y: Double) = pointMap.get(x, y).getOrElse {
     //point missing within mesh
@@ -188,8 +190,6 @@ case class MeshLeveling(val points: Seq[MeshLeveling.Point], val xMax: Int, val 
 
     (total.reduceLeft(_ + _) / total.length.toDouble).normal
   }
-
-  def vec3To2(v: Vec3) = Vec2(v.x, v.y)
 
   def calculateNormal(a: Vec3, b: Vec3, c: Vec3): Option[Vec3] = {
     val n2d1 = vec3To2(b - a)

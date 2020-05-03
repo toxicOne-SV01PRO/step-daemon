@@ -46,8 +46,9 @@ object ConfigMaker {
       ticksPerSecond = planner.getInt("ticks-per-second"),
       format = planner.getString("format").toLowerCase match {
         case "sp_4x4d_128" => StepProcessor.PageFormat.SP_4x4D_128
+        case "sp_4x2_256" => StepProcessor.PageFormat.SP_4x2_256
         case "sp_4x1_512" => StepProcessor.PageFormat.SP_4x1_512
-        case x => sys.error("Unknown pge format " + x)
+        case x => sys.error("Unknown page format " + x)
       }
     )
   }
