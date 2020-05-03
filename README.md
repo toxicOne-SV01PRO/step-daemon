@@ -12,7 +12,7 @@ Step Daemon utilizes mostly 64-bit double precision linear algebra and vector
 math from top to bottom, with some 32-bit single precision floating point used 
 in hot spots where precision can be leveraged safely.
 
-* Low RAM: a bit less than 200mb.
+* Low RAM: a bit less than 128mb.
 * Low CPU: runs at about 5-10% CPU on a Raspberry Pi 3.
 * Multithreaded pipeline using Akka actors.
 * Bicubic bed leveling with per-step accuracy (vs per-line).
@@ -28,15 +28,15 @@ in hot spots where precision can be leveraged safely.
   * Windows: must do a manual build with Cygwin
 * **Java JVM** for the desired machine.
   * MacOS: should be pre-installed
-  * Raspbian: *sudo apt-get install oracle-java8-jdk*
-  * Other Linux: Google around for java8 JDK installation instruction.
+  * Raspbian: *sudo apt-get install openjdk-11-jdk-headless*
+  * Other Linux: Google around for Java 11 JDK installation instruction.
 * **SBT** should come pre-bundled with stepd.
 
 ## Marlin Configuration ##
-* Update with [current compatible branch](https://github.com/colinrgodsey/Marlin/tree/chunk_support2).
+* Update with [current compatible branch](https://github.com/colinrgodsey/Marlin/tree/direct_stepping).
 * Only XYZ cartesian builds currently supported (no core or delta support yet).
 * Baud rate of 250kbps or 500kbps suggested for 16MHz devices.
-* Enable *CHUNK_SUPPORT*.
+* Enable *DIRECT_STEPPING*.
 * (Optional) Enable *AUTO_BED_LEVELING_BILINEAR* for bed leveling
   * Bilinear is the only supported mode currently.
   * Must be at least 3x3 sample points.
@@ -46,6 +46,7 @@ in hot spots where precision can be leveraged safely.
 * Copy example config from *config.conf.example* to *config.conf*.
 * Modify config settings as needed. Units are in mm.
 * Baud rate should match value configured in Marlin.
+* Page format should match the format configured in Marlin (defaults to SP_4x2_256).
 
 ## JVM Recommendations ##
 Works best with OpenJDK 11 and the following JVM arguments (4 cores or more):
