@@ -36,7 +36,8 @@ in hot spots where precision can be leveraged safely.
 * Update with [current compatible branch](https://github.com/colinrgodsey/Marlin/tree/direct_stepping).
 * Only XYZ cartesian builds currently supported (no core or delta support yet).
 * Baud rate of 250kbps or 500kbps suggested for 16MHz devices.
-* Enable *DIRECT_STEPPING*.
+* Enable *DIRECT_STEPPING* and *ADVANCED_OK*.
+* Disable *LIN_ADVANCE* if enabled.
 * (Optional) Enable *AUTO_BED_LEVELING_BILINEAR* for bed leveling
   * Bilinear is the only supported mode currently.
   * Must be at least 3x3 sample points.
