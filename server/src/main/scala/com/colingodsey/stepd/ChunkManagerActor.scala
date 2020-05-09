@@ -275,6 +275,10 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     case LineSerial.Response(str) =>
       log.info("recv: {}", str)
 
+    case LineSerial.Response(str) if str.startsWith("pages_ready") =>
+      log.error("Printer restarted!")
+      context.parent ! PoisonPill
+
     case LineSerial.ControlResponse(bytes) =>
       updatePageState(bytes)
       drainPending()
@@ -306,10 +310,11 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
       unstashAll()
 
     case HealthCheck if shouldStashCommands =>
-      if ((Deadline.now - lastSent) > 2.seconds) {
+      //TODO: this fails when waiting on heating. hrm....
+      /*if ((Deadline.now - lastSent) > 2.seconds) {
         log.error(s"Pipeline has stalled out! " + stateString)
         context.parent ! PoisonPill
-      }
+      }*/
 
     case Stats =>
       val bytesPerSec = (sentChunkBytes * 1000.0 / 5.0).toInt / 1000.0

@@ -111,8 +111,19 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
       }
 
       //goofy M105 response
-      if(str.startsWith("ok T"))
+      if(str.startsWith("ok T")) {
         context.system.eventStream.publish(a)
+
+        pending.filter {
+          case (_, (_, cmd)) => cmd.cmd == "M105"
+        }.headOption match {
+          case Some((n, (ref, cmd))) =>
+            log.info("removing a pending M105")
+            ref ! Completed(cmd)
+            pending -= n
+          case _ =>
+        }
+      }
     case Response(str) if str.startsWith("ok N") =>
       log.warning("Got an ok for no reason: {}", str)
     case Response(str) if str.startsWith("ok") =>
