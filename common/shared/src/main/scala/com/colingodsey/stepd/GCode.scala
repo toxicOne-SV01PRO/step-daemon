@@ -68,8 +68,8 @@ object GCode {
     val raw = Raw {
       "G6" +
         index.map(x => s" I$x").getOrElse("") +
-        speed.map(x => s" S$x").getOrElse("") +
-        steps.map(x => s" N$x").getOrElse("") +
+        speed.map(x => s" R$x").getOrElse("") +
+        steps.map(x => s" S$x").getOrElse("") +
         dirString('X', xDir) +
         dirString('Y', yDir) +
         dirString('Z', zDir) +
