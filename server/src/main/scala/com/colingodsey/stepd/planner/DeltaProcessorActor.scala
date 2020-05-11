@@ -19,7 +19,7 @@ package com.colingodsey.stepd.planner
 import com.colingodsey.stepd.GCode._
 import akka.actor._
 import com.colingodsey.stepd.Math.Vec4
-import com.colingodsey.stepd.PrintPipeline.TextResponse
+import com.colingodsey.stepd.PrintPipeline.{PauseInput, ResumeInput, TextResponse}
 import com.colingodsey.stepd.serial.LineSerial
 
 import scala.concurrent.duration._
@@ -52,6 +52,7 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
       log.info("Synced new position from device: " + pos)
 
       next ! SetPos(pos)
+      context.parent ! ResumeInput
 
       unstashAll()
       context become receive
@@ -65,9 +66,10 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
       //new behavior first
       context become waitingM114
 
-      next ! GetPos
-
       log info "syncing pipeline position"
+
+      next ! GetPos
+      context.parent ! PauseInput
     case x: SetPos =>
       process(x)
       //sendDown(getSetPos)

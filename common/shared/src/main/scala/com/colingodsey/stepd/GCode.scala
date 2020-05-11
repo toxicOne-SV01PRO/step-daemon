@@ -38,7 +38,7 @@ object GCode {
   }
 
   case class Raw(line: String) extends Command {
-    private val split = line.split(' ').toStream.filter(_.nonEmpty)
+    private val split = line.split(' ').toVector.filter(_.nonEmpty)
 
     val cmd = split.head
     val parts = split.tail

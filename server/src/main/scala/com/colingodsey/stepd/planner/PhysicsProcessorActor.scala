@@ -32,11 +32,10 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
 
     faultCounts += fault -> count
 
-    //TODO: put back!
-    /*if(fault != LookaheadFault)
+    if(fault != LookaheadFault)
       log.warning("fault: {}", fault.toString)
     else
-      log.debug("fault: {}", fault.toString)*/
+      log.debug("fault: {}", fault.toString)
   }
 
   def process(trap: Trapezoid): Unit = next ! trap

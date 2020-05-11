@@ -62,11 +62,14 @@ class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
       bufferIdx = 0
     case '\r' | '\n' if isControl && (bufferIdx > ControlLineLength) =>
       val bytes = ByteString(dataBuffer.slice(1, bufferIdx))
-      require(bytes.length == ControlLineLength)
 
-      context.parent ! ControlResponse(bytes)
-      isControl = false
-      bufferIdx = 0
+      if (bytes.length == ControlLineLength) {
+        context.parent ! ControlResponse(bytes)
+        isControl = false
+        bufferIdx = 0
+      } else {
+        log.warning("Malformed control line")
+      }
 
     case _ => bufferByte(b)
   }

@@ -30,6 +30,8 @@ object SerialDeviceActor {
   //val MaxQueue = 1
   val MaxIncr = 99
   val NumReset = "M110"
+
+  case object ResetNumbering
 }
 
 class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLogging {
@@ -53,6 +55,12 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
     lineSerial ! Serial.Bytes(finalBytes)
   }
 
+  def resetNumbering(): Unit = {
+    nIncr = 0
+    sendCommand(NumReset)
+    nIncr += 1
+  }
+
   def receive = {
     case _: Command if pending.size >= MaxQueue =>
       stash()
@@ -60,9 +68,7 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
       val str = cmd.toString
 
       if(nIncr > MaxIncr) {
-        nIncr = 1
-        sendCommand(NumReset)
-        nIncr += 1
+        resetNumbering()
       }
 
       sendCommand(str)
@@ -70,7 +76,8 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
 
       nIncr += 1
 
-      context.system.eventStream.publish(cmd)
+    case ResetNumbering =>
+      resetNumbering()
 
     case x: LineSerial.Bytes =>
       lineSerial ! x
@@ -118,11 +125,5 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
 
     //any other response we broadcast out to our subscribers
     case a: Response => context.system.eventStream.publish(a)
-  }
-
-  override def preStart(): Unit = {
-    super.preStart()
-
-    lineSerial ! Serial.Bytes(NumReset + "\r\n")
   }
 }

@@ -73,7 +73,7 @@ class SocatProxy extends Actor with ActorLogging with Stash with LineParser with
   }
 
   def resume(): Unit = {
-    log info "resuming"
+    log debug "resuming"
 
     context become normal
     unstashAll()
@@ -82,7 +82,7 @@ class SocatProxy extends Actor with ActorLogging with Stash with LineParser with
   }
 
   def pause(): Unit = {
-    log info "pausing"
+    log debug "pausing"
 
     context become paused
 
@@ -106,8 +106,8 @@ class SocatProxy extends Actor with ActorLogging with Stash with LineParser with
 
     case TextResponse(str) if str.startsWith("ok N") =>
     case TextResponse(str) if str.startsWith("!") =>
-    case TextResponse("start") => // block start from being sent
     case TextResponse(str) =>
+      log.info("out: " + str)
       serialRef.get ! LineSerial.Bytes(str)
       serialRef.get ! LineSerial.Bytes("\n")
   }
@@ -144,7 +144,6 @@ class SocatProxy extends Actor with ActorLogging with Stash with LineParser with
     super.preStart()
 
     context.system.eventStream.subscribe(self, classOf[TextResponse])
-    context.system.eventStream.subscribe(self, classOf[InputFlowSignal])
 
     //incase we didnt shut down cleanly last time
     Try(s"rm $clientDevice".!)

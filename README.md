@@ -71,3 +71,4 @@ cat hellbenchy.gcode | tee /tmp/pty-stepd-client
   * Add a custom serial port to OctoPrint for  */tmp/pty-stepd-client*.
   * Restart OctoPrint if port does not show in the list (make sure stepd is running).
   * Connect using *auto* baud rate (must be auto).
+  * Disable timeout detection in OctoPrint settings.

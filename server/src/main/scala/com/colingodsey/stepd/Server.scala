@@ -52,32 +52,63 @@ object PrintPipeline {
   case class TextResponse(str: String) extends Response
   case class ControlResponse(data: ByteString) extends Response
 
-  case object Restart extends NoStackTrace
+  //TODO: send event over bus, let persistent actors reset state safeleft
+  case object DeviceRestart
 }
 
-class PrintPipeline(proxy: ActorRef, device: ActorRef) extends Actor {
+class PrintPipeline(proxy: ActorRef, device: ActorRef) extends Actor with ActorLogging {
+  import PrintPipeline._
+
   val chunkManager = context.actorOf(Props[PageManagerActor], name="pages")
   val steps = context.actorOf(Props(classOf[StepProcessorActor], chunkManager, ConfigMaker.plannerConfig), name="steps")
   val physics = context.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
   val delta = context.actorOf(Props(classOf[DeltaProcessorActor], physics, false), name="delta")
 
-  override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 10, withinTimeRange = 1.minute) {
-      case _: Throwable => SupervisorStrategy.Escalate
-    }
+  val drainDeadline = 2.seconds.fromNow
 
-  context watch proxy
-  context watch device
+  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
+
+  var pausers = Set[ActorRef]()
+
+  context.children foreach context.watch
 
   context.system.eventStream.subscribe(self, classOf[Command])
 
+  device ! SerialDeviceActor.ResetNumbering
+
+  log.info("Pipeline started, draining for 2 seconds")
+
+  // simulate normal restart message
+  context.system.eventStream.publish(TextResponse("start"))
+
+  checkPause()
+
+  def checkPause(): Unit = {
+    val msg = if (pausers.isEmpty) ResumeInput else PauseInput
+
+    proxy ! msg
+  }
+
   def receive = {
+    case Terminated(_) =>
+      sys.error("Child terminated, restarting pipeline")
+
+    // input flow control
+    case PauseInput =>
+      pausers += sender
+      checkPause()
+    case ResumeInput =>
+      pausers -= sender
+      checkPause()
+
     // tail of pipeline
     case x: Command if sender == chunkManager => device.tell(x, sender)
     case x: LineSerial.Bytes if sender == chunkManager => device.tell(x, sender)
 
     // head of pipeline, from proxy
-    case x: Command => delta.tell(x, sender)
+    case x: Command if drainDeadline.isOverdue() || !x.isGCommand =>
+      delta.tell(x, sender)
+    case x: Command => log.warning("Discarding command {}", x)
   }
 }
 

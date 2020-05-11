@@ -111,6 +111,7 @@ object Serial {
     override def postStop(): Unit = {
       super.postStop()
 
+      thread.wake()
       thread.close()
     }
   }
@@ -180,6 +181,9 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
 
   override def postStop(): Unit = {
     super.postStop()
+
+    context stop reader
+    context stop writer
 
     blocking(port.closePort())
   }

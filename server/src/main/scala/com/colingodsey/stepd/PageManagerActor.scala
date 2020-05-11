@@ -29,6 +29,7 @@ import scala.concurrent.duration._
 object PageManagerActor {
   val MaxGCodeQueue = 4
   val NumPages = 16
+  val MaxStash = 8
 
   val TestFailure = false
 
@@ -93,7 +94,7 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
 
   def waitingCommands = pendingCommands >= MaxGCodeQueue
 
-  def shouldStashCommands = !pageAvailable || waitingCommands
+  def shouldStashCommands = !pageAvailable || waitingCommands || !hasStarted
 
   // the queue is blocked waiting on a needed chunk transfer
   def canTransmitNext = pending.headOption match {
@@ -181,14 +182,20 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
     case x => sys.error("unexpected queued item " + x)
   }
 
-  def drainStash(): Unit = while (!shouldStashCommands && stash.nonEmpty) {
-    receiveInput(stash.removeHead())
-  }
+  def drainStash(): Unit =
+    while (!shouldStashCommands && stash.nonEmpty)
+      receiveInput(stash.removeHead())
 
   def drainAll(): Unit = {
     drainPending()
     drainStash()
     doPauseCheck()
+  }
+
+  def doPauseCheck(): Unit = {
+    val msg = if (stash.length < MaxStash) ResumeInput else PauseInput
+
+    context.parent ! msg
   }
 
   def sendPageUnlock(page: Int) = {
@@ -242,12 +249,6 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
     } updatePageState(pageIdx, state)
   }
 
-  def doPauseCheck(): Unit = {
-    val msg = if (stash.length < 64) ResumeInput else PauseInput
-
-    context.system.eventStream.publish(msg)
-  }
-
   def receiveInput: PartialFunction[Any, Unit] = {
     case x @ (_: Page | _: Command) if shouldStashCommands =>
       stash += x
@@ -256,7 +257,6 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
       addPage(x)
 
     case x: Command =>
-      log.info("TEST " + x)
       pending += x
   }
 
@@ -269,17 +269,13 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
 
       log.info("starting " + self.path.toStringWithoutAddress)
 
-      for (i <- 0 until NumPages)
-        pageStates += i -> PageState.Free
+      for (i <- 0 until NumPages) pageStates += i -> PageState.Free
 
-    case TextResponse(str) if str.startsWith("pages_ready") =>
+      doPauseCheck()
+    case TextResponse(str) if str.startsWith("echo:start") && hasStarted =>
       log.error("Printer restarted!")
-      throw PrintPipeline.Restart
-
-    case TextResponse(str) if str.startsWith("ok N") =>
-      log.debug("ok: {}", str)
-    case TextResponse(str) =>
-      log.info("recv: {}", str)
+      context stop self
+    case TextResponse(_) =>
 
     case ControlResponse(bytes) =>
       updatePageState(bytes)
@@ -287,12 +283,15 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
 
     case _: StepProcessor.SyncPos =>
 
+    case _: GDirectMove =>
+      sys.error("Received a G6 code!")
+
     case x: Page =>
-      receiveInput(x)
       drainAll()
+      receiveInput(x)
     case x: Command =>
-      receiveInput(x)
       drainAll()
+      receiveInput(x)
 
     case PrintPipeline.Completed(cmd) =>
       require(pendingCommands > 0, "more oks than sent commands!")
