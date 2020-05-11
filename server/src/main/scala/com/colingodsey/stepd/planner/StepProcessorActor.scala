@@ -16,14 +16,13 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.{Math, Pipeline}
 import akka.actor._
-import akka.util.ByteString
+
 import com.colingodsey.stepd.GCode._
 import com.colingodsey.stepd.planner.StepProcessor.ChunkMeta
 
-class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig)
-    extends StepProcessor(cfg.format) with Pipeline {
+class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepProcessor(cfg.format)
+    with Actor with ActorLogging with Stash {
   var splits = new Array[Int](4)
   var hasSentSpeed = false
 
@@ -42,10 +41,10 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig)
 
   //should move to chunk manager?
   def processChunk(chunk: Array[Byte], meta: ChunkMeta): Unit =
-    sendDown(Chunk(chunk, meta))
+    next ! Page(chunk, meta)
 
   def process(syncPos: StepProcessor.SyncPos): Unit =
-    sendDown(syncPos)
+    next ! syncPos
 
   def waitLeveling: Receive = {
     case x: MeshLeveling.Reader =>
@@ -58,30 +57,24 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig)
     case _ => stash()
   }
 
-  def normal: Receive = pipeline orElse {
+  def normal: Receive = {
     case trap: Trapezoid =>
-      ack()
       process(trap)
     case x: SetPos =>
-      ack()
       setPos(x)
-      sendDown(x)
+      next ! x
     case ZProbe =>
-      ack()
-
       log info "waiting for leveling data"
       context become waitLeveling
 
       flushChunk()
-      sendDown(ZProbe)
+      next ! ZProbe
 
-    case cmd: Command if cmd.isGCommand =>
-      ack()
+    case x: Command if x.isGCommand =>
       flushChunk()
-      sendDown(cmd)
-    case cmd: Command =>
-      ack()
-      sendDown(cmd)
+      next ! x
+    case x: Command =>
+      next ! x
   }
 
   def receive = normal

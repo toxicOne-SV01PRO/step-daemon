@@ -18,16 +18,16 @@ package com.colingodsey.stepd.planner
 
 import akka.util.ByteString
 
-object Chunk {
+object Page {
   val chunkHeader = ByteString.fromString("!")
   //Add a an extra line break or two incase a byte gets lost
   val chunkFooter = ByteString.fromString("\r\n") //ByteString.empty
 
-  def apply(bytes: Array[Byte], meta: StepProcessor.ChunkMeta): Chunk =
-    Chunk(ByteString(bytes), meta)
+  def apply(bytes: Array[Byte], meta: StepProcessor.ChunkMeta): Page =
+    Page(ByteString(bytes), meta)
 
-  def apply(bytes: Seq[Byte], meta: StepProcessor.ChunkMeta): Chunk =
-    Chunk(ByteString(bytes), meta)
+  def apply(bytes: Seq[Byte], meta: StepProcessor.ChunkMeta): Page =
+    Page(ByteString(bytes), meta)
 
   def getUnlockPageBytes(idx: Int) = {
     val idxByte = ByteString(idx.toByte)
@@ -35,8 +35,8 @@ object Chunk {
   }
 }
 
-case class Chunk(rawBytes: ByteString, meta: StepProcessor.ChunkMeta) {
-  import Chunk._
+case class Page(rawBytes: ByteString, meta: StepProcessor.ChunkMeta) {
+  import Page._
 
   def produceBytes(idx: Int, corrupt: Boolean = false): ByteString = {
     val testCorruption = if (corrupt) 1 else 0

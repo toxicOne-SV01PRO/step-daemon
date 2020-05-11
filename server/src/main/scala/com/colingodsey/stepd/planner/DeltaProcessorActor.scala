@@ -16,19 +16,19 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.Pipeline
 import com.colingodsey.stepd.GCode._
 import akka.actor._
 import com.colingodsey.stepd.Math.Vec4
+import com.colingodsey.stepd.PrintPipeline.TextResponse
 import com.colingodsey.stepd.serial.LineSerial
 
 import scala.concurrent.duration._
 
-class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends DeltaProcessor with Pipeline {
+class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends DeltaProcessor
+    with Actor with ActorLogging with Stash {
   import context.dispatcher
 
   var deltasProcessed: Int = 0
-  var curTimer: Option[Cancellable] = None
 
   var isAbsolute = true
   var frScale = 1.0
@@ -37,8 +37,8 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
   //is helpful for single or small sets of commands that dont do anything after
 
   //TODO: maybe need a timeout here?
-  def waitingM114: Receive = pipeline orElse {
-    case LineSerial.Response(str) if str.startsWith("X:") && str.contains(" Count ") =>
+  def waitingM114: Receive = {
+    case TextResponse(str) if str.startsWith("X:") && str.contains(" Count ") =>
       //Recv: X:0.00 Y:0.00 Z:10.00 E:0.00 Count X:0 Y:0 Z:16000
       val parts = str.trim.split(' ')
 
@@ -51,64 +51,58 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
 
       log.info("Synced new position from device: " + pos)
 
-      sendDown(SetPos(pos))
+      next ! SetPos(pos)
 
       unstashAll()
       context become receive
+    case _: TextResponse =>
+
     case _ => stash()
   }
 
-  def receive: Receive = pipeline orElse {
+  def receive: Receive = {
     case GetPos if !ignoreM114 =>
-      //stop processing all other messages until we get a response from this
-      ack()
-
       //new behavior first
       context become waitingM114
 
-      sendDown(GetPos)
+      next ! GetPos
 
       log info "syncing pipeline position"
     case x: SetPos =>
-      ack()
       process(x)
       //sendDown(getSetPos)
-      sendDown(x)
+      next ! x
     case x: GMove =>
-      ack()
       process(x)
 
     case SetAbsolute =>
-      ack()
-      sendDown(SetAbsolute)
+      next ! SetAbsolute
 
       log info "setting to absolute coords"
 
       isAbsolute = true
     case SetRelative =>
-      ack()
-      sendDown(SetRelative)
+      next ! SetRelative
 
       log info "setting to relative coords"
 
       isAbsolute = false
 
     case a @ FeedRate(Some(x)) =>
-      ack()
-      sendDown(a)
+      next ! a
 
       log info s"setting FR scale to $x"
       frScale = x / 100.0
 
     case x: Command =>
-      ack()
-
       //sendDown(getSetPos)
-      sendDown(x)
+      next ! x
+
+    case _: TextResponse =>
   }
 
   def process(delta: MoveDelta): Unit = {
-    sendDown(delta)
+    next ! delta
 
     deltasProcessed += 1
   }
@@ -116,10 +110,6 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
   override def preStart(): Unit = {
     super.preStart()
 
-    context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
-  }
-
-  override def postStop(): Unit = {
-    curTimer.foreach(_.cancel())
+    context.system.eventStream.subscribe(self, classOf[TextResponse])
   }
 }

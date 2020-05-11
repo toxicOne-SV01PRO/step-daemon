@@ -16,14 +16,14 @@
 
 package com.colingodsey.stepd.planner
 
-import com.colingodsey.stepd.Pipeline
 import akka.actor._
 import com.colingodsey.stepd.GCode._
 import com.colingodsey.stepd.Math._
 
 import scala.concurrent.duration._
 
-class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends PhysicsProcessor with Pipeline {
+class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends PhysicsProcessor
+    with Actor with ActorLogging {
   var faultCounts = Map[MathFault, Int]()
   var acc = cfg.accel
 
@@ -32,35 +32,29 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
 
     faultCounts += fault -> count
 
-    if(fault != LookaheadFault)
+    //TODO: put back!
+    /*if(fault != LookaheadFault)
       log.warning("fault: {}", fault.toString)
     else
-      log.debug("fault: {}", fault.toString)
+      log.debug("fault: {}", fault.toString)*/
   }
 
-  def process(trap: Trapezoid): Unit = {
-    sendDown(trap)
-  }
+  def process(trap: Trapezoid): Unit = next ! trap
 
   def endTrapAndContinue(cmd: Any): Unit = {
-    ack()
-
     //send an empty move so we can finish the pending trap, maintain linearization
     flushDelta()
-    sendDown(cmd)
+    next ! cmd
   }
 
   def jerk = cfg.jerk
 
-  def receive: Receive = pipeline orElse {
+  def receive: Receive = {
     case delta: MoveDelta if delta.isEOrZOnly =>
-      //TODO: this needed?
-      ack()
       flushDelta()
       process(delta)
       flushDelta()
     case delta: MoveDelta =>
-      ack()
       process(delta)
 
     case cmd @ SetMaxAcceleration(x, y, z, e) =>

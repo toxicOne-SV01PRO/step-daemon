@@ -320,7 +320,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
   }
 
   def receive: Receive = {
-    case Chunk(buff: ByteString, meta) if curChunk == null =>
+    case Page(buff: ByteString, meta) if curChunk == null =>
       ack()
 
       curChunk = buff
@@ -334,7 +334,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
       ticks += x
 
       consumeBuffer()
-    case _: Chunk =>
+    case _: Page =>
       stash()
     case setPos: SetPos if curChunk == null =>
       x = (setPos.x.getOrElse(pos.x) * stepsPer.x).round

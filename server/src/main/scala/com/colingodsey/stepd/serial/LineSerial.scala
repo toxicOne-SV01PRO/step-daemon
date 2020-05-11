@@ -18,12 +18,10 @@ package com.colingodsey.stepd.serial
 
 import akka.actor._
 import akka.util.ByteString
+import com.colingodsey.stepd.PrintPipeline.{ControlResponse, TextResponse}
 import com.colingodsey.stepd.planner.DeviceConfig
 
 object LineSerial {
-  case class Response(str: String)
-  case class ControlResponse(data: ByteString)
-
   type Bytes = Serial.Bytes
   val Bytes = Serial.Bytes
 
@@ -46,7 +44,7 @@ class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
 
   def processStr(str: String): Unit = {
     log.debug("recv: {}", str)
-    context.parent ! Response(str)
+    context.parent ! TextResponse(str)
   }
 
   def bufferByte(b: Byte): Unit = {

@@ -18,6 +18,7 @@ package com.colingodsey.stepd
 
 import akka.actor._
 import com.colingodsey.stepd.GCode.Command
+import com.colingodsey.stepd.PrintPipeline.{InputFlowSignal, TextResponse}
 import com.colingodsey.stepd.planner.DeviceConfig
 import com.colingodsey.stepd.serial.{LineSerial, Serial}
 
@@ -35,7 +36,7 @@ object SocatProxy {
   case class PTY(dev: String)
 }
 
-class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeline with LineParser with GCodeParser {
+class SocatProxy extends Actor with ActorLogging with Stash with LineParser with GCodeParser {
   import SocatProxy._
   import scala.sys.process._
 
@@ -47,7 +48,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
   def processCommand(cmd: Command): Unit = {
     if (cmd.raw.cmd != "M110")
-      sendDown(cmd)
+      context.system.eventStream.publish(cmd)
   }
 
   def linkingDone(): Unit = {
@@ -55,8 +56,7 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
     val devConf = DeviceConfig(serverDevice, 250000)
 
-    val ref = context.actorOf(Props(classOf[Serial], devConf),
-      name = "proxy-serial")
+    val ref = context.actorOf(Props(classOf[Serial], devConf), name = "proxy-serial")
 
     serialRef = Some(ref)
 
@@ -72,21 +72,47 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
       serialRef.get ! LineSerial.Bytes(s"ok N$n\n")
   }
 
-  def normal: Receive = pipeline orElse {
+  def resume(): Unit = {
+    log info "resuming"
+
+    context become normal
+    unstashAll()
+
+    for (ref <- serialRef) ref ! Serial.ResumeRead
+  }
+
+  def pause(): Unit = {
+    log info "pausing"
+
+    context become paused
+
+    for (ref <- serialRef) ref ! Serial.PauseRead
+  }
+
+  def paused: Receive = {
+    case PrintPipeline.PauseInput =>
+    case PrintPipeline.ResumeInput => resume()
+
+    case _ => stash()
+  }
+
+  def normal: Receive = {
+    case PrintPipeline.PauseInput => pause()
+    case PrintPipeline.ResumeInput =>
+
     case Serial.Bytes(dat) =>
       //TODO: "sanitize '!' character"
       dat foreach process
 
-    case LineSerial.Response(str) if str.startsWith("ok N") =>
-    //case LineSerial.Response(str) if str.startsWith("ok ") =>
-    case LineSerial.Response("start") => // block start from being sent
-    case LineSerial.Response(str) if str.startsWith("!") =>
-    case LineSerial.Response(str) =>
+    case TextResponse(str) if str.startsWith("ok N") =>
+    case TextResponse(str) if str.startsWith("!") =>
+    case TextResponse("start") => // block start from being sent
+    case TextResponse(str) =>
       serialRef.get ! LineSerial.Bytes(str)
       serialRef.get ! LineSerial.Bytes("\n")
   }
 
-  def linking: Receive = pipeline orElse {
+  def linking: Receive = {
     case PTY(_) if nLinked == 2 =>
       sys.error("this is... unexpected")
     case PTY(dev) =>
@@ -112,35 +138,24 @@ class SocatProxy(val next: ActorRef) extends Actor with ActorLogging with Pipeli
 
   def receive = linking
 
-  def logErr(e: Throwable): Unit = {
-    log.error(e.toString)
-  }
+  def logWarn(e: Throwable): Unit = log.warning(e.toString)
 
   override def preStart(): Unit = {
     super.preStart()
 
-    context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
+    context.system.eventStream.subscribe(self, classOf[TextResponse])
+    context.system.eventStream.subscribe(self, classOf[InputFlowSignal])
 
     //incase we didnt shut down cleanly last time
     Try(s"rm $clientDevice".!)
     Try(s"rm $serverDevice".!)
   }
 
-  override def onWake(): Unit = {
-    serialRef.foreach(ref => ref ! Serial.ResumeRead)
-    super.onWake()
-  }
-
-  override def onWait(): Unit = {
-    serialRef.foreach(ref => ref ! Serial.PauseRead)
-    super.onWait()
-  }
-
   override def postStop(): Unit = blocking {
     super.postStop()
 
-    Try(s"rm $clientDevice".!).failed foreach logErr
-    Try(s"rm $serverDevice".!).failed foreach logErr
+    Try(s"rm $clientDevice".!).failed foreach logWarn
+    Try(s"rm $serverDevice".!).failed foreach logWarn
 
     ps.destroy()
     ps.exitValue()

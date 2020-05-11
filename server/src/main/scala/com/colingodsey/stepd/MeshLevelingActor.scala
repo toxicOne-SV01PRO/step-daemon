@@ -19,8 +19,10 @@ package com.colingodsey.stepd
 import java.io.FileNotFoundException
 
 import akka.actor._
+import com.colingodsey.stepd.GCode.Command
+import com.colingodsey.stepd.PrintPipeline.TextResponse
 import com.colingodsey.stepd.planner.{MeshLeveling, MeshLevelingConfig, MeshLevelingReader}
-import com.colingodsey.stepd.serial.SerialGCode
+import com.colingodsey.stepd.serial.SerialDeviceActor
 import org.json4s._
 import org.json4s.native.Serialization
 import org.json4s.native.Serialization.{read, write}
@@ -37,12 +39,12 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
   import MeshLevelingActor._
   implicit val formats = Serialization.formats(NoTypeHints)
 
-  context.system.eventStream.subscribe(self, classOf[SerialGCode.Response])
-  context.system.eventStream.subscribe(self, classOf[SerialGCode.Command])
-
   var pointsBuffer = Set[MeshLeveling.Point]()
   var currentLeveling: Option[MeshLeveling] = None
   var isReading = false
+
+  context.system.eventStream.subscribe(self, classOf[PrintPipeline.TextResponse])
+  context.system.eventStream.subscribe(self, classOf[Command])
 
   def loadFromFile(): Unit = try {
     val str = Util.readFile(configPath).trim
@@ -94,18 +96,21 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
   }
 
   def receive = {
-    case SerialGCode.Response(MeshLeveling.OutputLine(point)) if isReading =>
+    case TextResponse(MeshLeveling.OutputLine(point)) if isReading =>
       pointsBuffer += point
-    case SerialGCode.Response(str) if isReading && str.startsWith("Bilinear Leveling Grid:") =>
+    case TextResponse(str) if isReading && str.startsWith("Bilinear Leveling Grid:") =>
       flushPoints()
-    case SerialGCode.Response(line @ MeshLeveling.OutputLine(_)) =>
+    case TextResponse(line @ MeshLeveling.OutputLine(_)) =>
       log.warning("Not expecting bed point: " + line)
-    case SerialGCode.Command(cmd) if cmd.startsWith("G29 ") =>
+    case _: TextResponse =>
+
+    case Command(cmd) if cmd.startsWith("G29 ") =>
       require(!isReading, "started bed leveling before finishing the last")
 
       log.info("gathering bed level points")
 
       isReading = true
+    case _: Command =>
   }
 
   override def preStart(): Unit = {

@@ -27,6 +27,8 @@ object GCode {
   sealed trait Command {
     def raw: Raw
     def isGCommand: Boolean
+
+    override def toString: String = raw.toString
   }
   sealed trait MCommand extends Command {
     def isGCommand = false
@@ -49,6 +51,8 @@ object GCode {
       parts.filter(_.head == ident).headOption.map(_.tail)
 
     def hasPart(ident: Char) = getPart(ident).isDefined
+
+    override def toString: String = line
   }
 
   case class GDirectMove(index: Option[Int] = None,

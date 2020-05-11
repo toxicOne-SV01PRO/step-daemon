@@ -19,48 +19,23 @@ package com.colingodsey.stepd
 import akka.actor._
 import akka.util.ByteString
 import com.colingodsey.stepd.GCode._
+import com.colingodsey.stepd.PrintPipeline.{ControlResponse, PauseInput, Response, ResumeInput, TextResponse}
 import com.colingodsey.stepd.planner._
-import com.colingodsey.stepd.serial.{LineSerial, SerialGCode}
+import com.colingodsey.stepd.serial.{LineSerial, SerialDeviceActor}
 
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
-/*
-New manager:
-Keep map of pending buffers.
-Keep map of client state.
-
-Blah, or fancy style:
-
-Keep actor for each page.
-Child map kept for each page.
-Child is loaded for each transfer.
-Child remains until transfer is ready.
-Child dies, completes responses, and is removed from map.
-
-Any new incoming chunk will block the stream until a new remote chunk is available.
-
-The gcode-stream at this actor lags far behind the actual action. This lends well to the mechanics for page buffering.
-
-The key is that the gcode 'action' wont be written until the page is confirmed. And the gcode stream lags behind anyways...
-
-Chunks will need to be converted to 'chunk references' or something, and block if its not confirmed.
-
-Manager will need a queue. Everything in the queue will have a chance to buffer.
-Only items in the queue that are buffered will be sent to the serial actor.
-
-def chunk -> gcode_c(ActorRef, chunk). ActorRef could be Future for deathwatch?
-
-
- */
-
-object ChunkManagerActor {
+object PageManagerActor {
   val MaxGCodeQueue = 4
-  val RetryCooldown = 30.millis
   val NumPages = 16
 
   val TestFailure = false
+
+  case class StagedChunk(page: Int)
+
+  case object HealthCheck
+  case object Stats
 
   object PageState {
     case object Free extends PageState(0)
@@ -69,8 +44,6 @@ object ChunkManagerActor {
     case object Fail extends PageState(3)
 
     val All = Set[PageState](Free, Writing, Ok, Fail)
-
-    //TODO we need a g-code to 'unlock' failed pages
 
     //allowed transitions for client-provided state
     val TransitionMap = Map[PageState, Set[PageState]](
@@ -91,35 +64,30 @@ object ChunkManagerActor {
     def isValidTransition(x: (PageState, PageState)): Boolean = ValidTransitions(x)
   }
   sealed abstract class PageState(val id: Int)
-
-  case class StagedChunk(page: Int)
-
-  case object HealthCheck
-  case object Stats
 }
 
-class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with Stash
-    with ActorLogging with Pipeline.Terminator with Timers {
-  import ChunkManagerActor._
+class PageManagerActor extends Actor with ActorLogging with Timers {
+  import PageManagerActor._
   import context.dispatcher
 
   //Queue items that may depend on a page being written
-  val queue = mutable.Queue[AnyRef]()
+  val pending = mutable.Queue[Any]()
+
+  val stash = mutable.Queue[Any]()
 
   //This is the host-authority page state
-  var pageStates = Map[Int, PageState]()
-  var pageChunks = Map[Int, Chunk]()
+  var pageStates = Map[Int, PageState]().withDefaultValue(PageState.Free)
+  var pageChunks = Map[Int, Page]()
   var lastSent = Deadline.now
 
   var pendingCommands = 0
   var sentChunkBytes = 0
   var nextFreePage = 0
+  var hasStarted = false
 
   var lastReportedSpeed = 0
   var lastReportedDirection = Seq(false, false, false, false)
   var hasReportedDirection = false
-
-  //TODO: needs a guard that watches for a page blocking transmit if in fail state
 
   def pageAvailable = pageStates(nextFreePage) == PageState.Free
 
@@ -128,7 +96,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   def shouldStashCommands = !pageAvailable || waitingCommands
 
   // the queue is blocked waiting on a needed chunk transfer
-  def canTransmitNext = queue.headOption match {
+  def canTransmitNext = pending.headOption match {
     case Some(StagedChunk(page)) => pageStates(page) == PageState.Ok
     case Some(_: Command) => !waitingCommands
     case Some(_) => sys.error("something random in our queue")
@@ -151,10 +119,10 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
     sentChunkBytes += chunk.rawBytes.length
 
-    gcodeSerial ! LineSerial.Bytes(chunk.produceBytes(page, testCorrupt))
+    context.parent ! LineSerial.Bytes(chunk.produceBytes(page, testCorrupt))
   }
 
-  def addPage(x: Chunk) = {
+  def addPage(x: Page) = {
     val page = nextFreePage
 
     nextFreePage += 1
@@ -162,13 +130,13 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
 
     require(!pageChunks.contains(page), s"trying to replace pending page $page")
 
-    queue += StagedChunk(page)
+    pending += StagedChunk(page)
     pageChunks += page -> x
     writePage(page)
   }
 
   def sendGCodeCommand(cmd: Command): Unit = {
-    gcodeSerial ! SerialGCode.Command(cmd.raw.line)
+    context.parent ! cmd
 
     pendingCommands += 1
     lastSent = Deadline.now
@@ -179,7 +147,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
       Some(meta.directions(axis))
     else None
 
-  def drainPending(): Unit = while (canTransmitNext) queue.removeHead() match {
+  def drainPending(): Unit = while (canTransmitNext) pending.removeHead() match {
     case StagedChunk(page) =>
       val chunk = pageChunks(page)
 
@@ -213,9 +181,19 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     case x => sys.error("unexpected queued item " + x)
   }
 
+  def drainStash(): Unit = while (!shouldStashCommands && stash.nonEmpty) {
+    receiveInput(stash.removeHead())
+  }
+
+  def drainAll(): Unit = {
+    drainPending()
+    drainStash()
+    doPauseCheck()
+  }
+
   def sendPageUnlock(page: Int) = {
-    val bytes = Chunk.getUnlockPageBytes(page)
-    gcodeSerial ! LineSerial.Bytes(bytes)
+    val bytes = Page.getUnlockPageBytes(page)
+    context.parent ! LineSerial.Bytes(bytes)
   }
 
   def updatePageState(page: Int, state: PageState): Unit = {
@@ -264,50 +242,65 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
     } updatePageState(pageIdx, state)
   }
 
-  /*
-  TODO: need to start filling pages in numeric order, recognize fail state
-  of getting written -> ok from a later page without getting one for the early page
-   */
+  def doPauseCheck(): Unit = {
+    val msg = if (stash.length < 64) ResumeInput else PauseInput
 
-  def receive = {
-    case LineSerial.Response(str) if str.startsWith("ok N") =>
-      log.debug("ok: {}", str)
-    case LineSerial.Response(str) =>
-      log.info("recv: {}", str)
+    context.system.eventStream.publish(msg)
+  }
 
-    case LineSerial.Response(str) if str.startsWith("pages_ready") =>
-      log.error("Printer restarted!")
-      context.parent ! PoisonPill
+  def receiveInput: PartialFunction[Any, Unit] = {
+    case x @ (_: Page | _: Command) if shouldStashCommands =>
+      stash += x
 
-    case LineSerial.ControlResponse(bytes) =>
-      updatePageState(bytes)
-      drainPending()
-      unstashAll()
-
-    //waiting on some free pages
-    case _: Chunk | _: Command if shouldStashCommands =>
-      stash()
-
-    case x: Chunk =>
-      ack()
+    case x: Page =>
       addPage(x)
 
     case x: Command =>
-      ack()
-      queue += x
-      drainPending()
+      log.info("TEST " + x)
+      pending += x
+  }
+
+  def receive = {
+    case TextResponse(str) if str.startsWith("pages_ready") && !hasStarted =>
+      hasStarted = true
+
+      timers.startTimerAtFixedRate("health", HealthCheck, 1.second)
+      timers.startTimerAtFixedRate("stats", Stats, 5.seconds)
+
+      log.info("starting " + self.path.toStringWithoutAddress)
+
+      for (i <- 0 until NumPages)
+        pageStates += i -> PageState.Free
+
+    case TextResponse(str) if str.startsWith("pages_ready") =>
+      log.error("Printer restarted!")
+      throw PrintPipeline.Restart
+
+    case TextResponse(str) if str.startsWith("ok N") =>
+      log.debug("ok: {}", str)
+    case TextResponse(str) =>
+      log.info("recv: {}", str)
+
+    case ControlResponse(bytes) =>
+      updatePageState(bytes)
+      drainAll()
 
     case _: StepProcessor.SyncPos =>
-      ack()
 
-    case SerialGCode.Completed(cmd) =>
+    case x: Page =>
+      receiveInput(x)
+      drainAll()
+    case x: Command =>
+      receiveInput(x)
+      drainAll()
+
+    case PrintPipeline.Completed(cmd) =>
       require(pendingCommands > 0, "more oks than sent commands!")
       pendingCommands -= 1
 
       log.debug("ok: {}", cmd)
 
-      drainPending()
-      unstashAll()
+      drainAll()
 
     case HealthCheck if shouldStashCommands =>
       //TODO: this fails when waiting on heating. hrm....
@@ -315,6 +308,7 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
         log.error(s"Pipeline has stalled out! " + stateString)
         context.parent ! PoisonPill
       }*/
+    case HealthCheck =>
 
     case Stats =>
       val bytesPerSec = (sentChunkBytes * 1000.0 / 5.0).toInt / 1000.0
@@ -327,34 +321,14 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   }
 
   def stateString = {
-    def pendingPageId = queue.headOption match {
+    def pendingPageId = pending.headOption match {
       case Some(StagedChunk(x)) => Some(x)
       case _ => None
     }
 
     s"pageAvailable: $pageAvailable waitingCommands: $waitingCommands\n" +
-      s"queueSize: ${queue.size} pendingPageId: $pendingPageId\n" +
+      s"queueSize: ${pending.size} pendingPageId: $pendingPageId\n" +
       s"pageStates: $pageStates"
-  }
-
-
-  def waitStart: Receive = {
-    case LineSerial.Response(str) if str.startsWith("pages_ready") =>
-      context become receive
-
-      timers.startTimerAtFixedRate("health", HealthCheck, 1.second)
-      timers.startTimerAtFixedRate("stats", Stats, 5.seconds)
-
-      log.info("starting " + self.path.toStringWithoutAddress)
-
-      for (i <- 0 until NumPages)
-        pageStates += i -> PageState.Free
-
-      unstashAll()
-    case LineSerial.Response(str) =>
-      log.info("recv: {}", str)
-    case _ =>
-      stash()
   }
 
   override def postStop(): Unit = {
@@ -365,9 +339,6 @@ class ChunkManagerActor(gcodeSerial: ActorRef, maxPages: Int) extends Actor with
   override def preStart(): Unit = {
     super.preStart()
 
-    context.system.eventStream.subscribe(self, classOf[LineSerial.Response])
-    context.system.eventStream.subscribe(self, classOf[LineSerial.ControlResponse])
-
-    context become waitStart
+    context.system.eventStream.subscribe(self, classOf[Response])
   }
 }

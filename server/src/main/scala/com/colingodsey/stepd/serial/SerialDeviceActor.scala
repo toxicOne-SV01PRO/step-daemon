@@ -19,28 +19,21 @@ package com.colingodsey.stepd.serial
 import akka.actor._
 import akka.util.ByteString
 
+import com.colingodsey.stepd.GCode.Command
+import com.colingodsey.stepd.PrintPipeline.{Completed, Response, TextResponse}
 import com.colingodsey.stepd.planner.DeviceConfig
 
 import scala.concurrent.duration._
 
-object SerialGCode {
-  case class Command(cmd: String)
-  case class Completed(cmd: Command)
-
-  type Response = LineSerial.Response
-  val Response = LineSerial.Response
-
-  type ControlResponse = LineSerial.ControlResponse
-  val ControlResponse = LineSerial.ControlResponse
-
+object SerialDeviceActor {
   val MaxQueue = 4
   //val MaxQueue = 1
   val MaxIncr = 99
   val NumReset = "M110"
 }
 
-class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging {
-  import SerialGCode._
+class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLogging {
+  import SerialDeviceActor._
 
   var nIncr = 1
   var pending = Map[Int, (ActorRef, Command)]()
@@ -48,12 +41,6 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
   val lineSerial: ActorRef = context.actorOf(
     Props(classOf[LineSerial], cfg),
     name = "line-serial")
-
-  override def preStart(): Unit = {
-    super.preStart()
-
-    lineSerial ! Serial.Bytes(NumReset + "\r\n")
-  }
 
   def sendCommand(str: String) = {
     val str0 = s"N$nIncr $str"
@@ -69,8 +56,8 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
   def receive = {
     case _: Command if pending.size >= MaxQueue =>
       stash()
-    case cmd @ Command(str0) =>
-      val str = str0.trim
+    case cmd: Command =>
+      val str = cmd.toString
 
       if(nIncr > MaxIncr) {
         nIncr = 1
@@ -91,7 +78,7 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
     case x: Serial.FlowCommand =>
       lineSerial ! x
 
-    case a @ Response(str) if str.startsWith("ok N") || str.startsWith("ok T") =>
+    case a @ TextResponse(str) if str.startsWith("ok N") || str.startsWith("ok T") =>
       unstashAll()
 
       log.debug("ok: {}", str)
@@ -115,7 +102,7 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
         context.system.eventStream.publish(a)
 
         pending.filter {
-          case (_, (_, cmd)) => cmd.cmd == "M105"
+          case (_, (_, cmd)) => cmd.raw.cmd == "M105"
         }.headOption match {
           case Some((n, (ref, cmd))) =>
             log.info("removing a pending M105")
@@ -124,12 +111,18 @@ class SerialGCode(cfg: DeviceConfig) extends Actor with Stash with ActorLogging 
           case _ =>
         }
       }
-    case Response(str) if str.startsWith("ok N") =>
+    case TextResponse(str) if str.startsWith("ok N") =>
       log.warning("Got an ok for no reason: {}", str)
-    case Response(str) if str.startsWith("ok") =>
+    case TextResponse(str) if str.startsWith("ok") =>
       log.warning("Random ok with no N value: {}", str)
-    //any other line we broadcast out to our subscribers
+
+    //any other response we broadcast out to our subscribers
     case a: Response => context.system.eventStream.publish(a)
-    case a: ControlResponse => context.system.eventStream.publish(a)
+  }
+
+  override def preStart(): Unit = {
+    super.preStart()
+
+    lineSerial ! Serial.Bytes(NumReset + "\r\n")
   }
 }

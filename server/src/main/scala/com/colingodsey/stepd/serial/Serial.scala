@@ -127,7 +127,6 @@ object Serial {
       super.postStop()
       //blocking(port writeBytes ByteString("\r\nM112\r\n").toArray)
       blocking(port writeBytes ByteString("\r\nM108\r\n").toArray)
-      port.closePort()
     }
   }
 }
@@ -145,6 +144,9 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
 
   //reader is also responsible for closing port... if possible
   val reader = context.actorOf(Props(classOf[Reader], port), name = "reader")
+
+  context watch reader
+  context watch writer
 
   def initPort = {
     log.info {
@@ -174,5 +176,11 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
       writer ! x
     case x: FlowCommand =>
       reader ! x
+  }
+
+  override def postStop(): Unit = {
+    super.postStop()
+
+    blocking(port.closePort())
   }
 }
