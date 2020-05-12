@@ -12,8 +12,8 @@ Step Daemon utilizes mostly 64-bit double precision linear algebra and vector
 math from top to bottom, with some 32-bit single precision floating point used 
 in hot spots where precision can be leveraged safely.
 
-* Low RAM: a bit less than 128mb.
-* Low CPU: runs at about 5-10% CPU on a Raspberry Pi 3.
+* Low RAM: less than 64mb.
+* Low CPU: runs at about 4-5% total CPU on a Raspberry Pi 3.
 * Multithreaded pipeline using Akka actors.
 * Bicubic bed leveling with per-step accuracy (vs per-line).
 * OctoPrint compatible.
@@ -52,8 +52,11 @@ in hot spots where precision can be leveraged safely.
 ## JVM Recommendations ##
 Works best with OpenJDK 11 and the following JVM arguments (4 cores or more):
 ```bash
--Xmx96M -XX:+UseG1GC -XX:ParallelGCThreads=4 -XX:ConcGCThreads=2 -XX:MaxGCPauseMillis=15
+-Xmx64M -XX:+UseG1GC -XX:ParallelGCThreads=4 -XX:ConcGCThreads=2 -XX:MaxGCPauseMillis=5
 ```
+
+### _JVM Warmup Warning_ ###
+There is currently no warmup routine in stepd. After starting stepd, the first few seconds of motion will be a bit jumpy as the JVM loads all the needed code. Everything should be fine after this, and you generally should not need to reload stepd afterwards. Eventually we will have a warmup routine that should help with this greatly. 
 
 ## Usage ##
 
