@@ -17,8 +17,9 @@
 package com.colingodsey.stepd.planner
 
 import akka.actor._
-
 import com.colingodsey.stepd.GCode._
+import com.colingodsey.stepd.MeshLevelingActor
+import com.colingodsey.stepd.PrintPipeline.{PauseInput, ResumeInput}
 import com.colingodsey.stepd.planner.StepProcessor.ChunkMeta
 
 class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepProcessor(cfg.format)
@@ -32,6 +33,8 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   val stepsPerMM = cfg.stepsPerMM
 
   context.system.eventStream.subscribe(self, classOf[MeshLeveling.Reader])
+
+  context.system.eventStream.publish(MeshLevelingActor.Load)
 
   def recordSplit(idx: Int): Unit = {
     splits(idx) = splits(idx) + 1
@@ -48,18 +51,22 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
 
   def waitLeveling: Receive = {
     case x: MeshLeveling.Reader =>
-      leveling = x
-      unstashAll()
-
-      log info "got mesh leveling data"
+      log info "done waiting on new mesh data"
 
       context become normal
+      self ! x
+      context.parent ! ResumeInput
+      unstashAll()
     case _ => stash()
   }
 
   def normal: Receive = {
     case trap: Trapezoid =>
       process(trap)
+
+    case x: MeshLeveling.Reader =>
+      log info "got mesh leveling data"
+      leveling = x
 
     case x: SetPos =>
       setPos(x)
@@ -70,6 +77,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
 
       flushChunk()
       next ! ZProbe
+      context.parent ! PauseInput
     case a @ FlowRate(Some(x)) =>
       flowRate = x / 100.0
       log info s"setting flow rate scale to $flowRate"

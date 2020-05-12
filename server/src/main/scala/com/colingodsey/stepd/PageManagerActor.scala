@@ -286,11 +286,11 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
       sys.error("Received a G6 code!")
 
     case x: Page =>
-      drainAll()
       receiveInput(x)
+      drainAll()
     case x: Command =>
-      drainAll()
       receiveInput(x)
+      drainAll()
 
     case PrintPipeline.Completed(cmd) =>
       require(pendingCommands > 0, "more oks than sent commands!")

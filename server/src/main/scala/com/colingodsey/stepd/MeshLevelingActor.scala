@@ -33,10 +33,13 @@ import scala.util.control.NonFatal
 
 object MeshLevelingActor {
   val configPath = "bedlevel.json"
+
+  case object Load
 }
 
 class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging {
   import MeshLevelingActor._
+
   implicit val formats = Serialization.formats(NoTypeHints)
 
   var pointsBuffer = Set[MeshLeveling.Point]()
@@ -45,6 +48,7 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
 
   context.system.eventStream.subscribe(self, classOf[PrintPipeline.TextResponse])
   context.system.eventStream.subscribe(self, classOf[Command])
+  context.system.eventStream.subscribe(self, Load.getClass)
 
   def loadFromFile(): Unit = try {
     val str = Util.readFile(configPath).trim
@@ -102,20 +106,19 @@ class MeshLevelingActor(cfg: MeshLevelingConfig) extends Actor with ActorLogging
       flushPoints()
     case TextResponse(line @ MeshLeveling.OutputLine(_)) =>
       log.warning("Not expecting bed point: " + line)
-    case _: TextResponse =>
-
-    case Command(cmd) if cmd.startsWith("G29 ") =>
+    case TextResponse("G29 Auto Bed Leveling") =>
       require(!isReading, "started bed leveling before finishing the last")
 
       log.info("gathering bed level points")
 
       isReading = true
+    case _: TextResponse =>
+
+    case Load =>
+      log info "Loading mesh level data"
+      loadFromFile()
+
     case _: Command =>
   }
 
-  override def preStart(): Unit = {
-    loadFromFile()
-
-    super.preStart()
-  }
 }
