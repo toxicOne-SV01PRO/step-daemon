@@ -93,8 +93,8 @@ class DeltaProcessorActor(val next: ActorRef, ignoreM114: Boolean) extends Delta
     case a @ FeedRate(Some(x)) =>
       next ! a
 
-      log info s"setting FR scale to $x"
       frScale = x / 100.0
+      log info s"setting feed rate scale to $frScale"
 
     case x: Command =>
       //sendDown(getSetPos)

@@ -86,6 +86,7 @@ abstract class StepProcessor(format: StepProcessor.PageFormat) {
   var chunkIndex = 0
   var isLow = true // low or high nibble for SP_4x1_512
   var lastPos = Vec4.Zero
+  var flowRate = 1.0
 
   //stats
   def recordSplit(axis: Int): Unit
@@ -243,10 +244,10 @@ abstract class StepProcessor(format: StepProcessor.PageFormat) {
       val zOffset = leveling.getOffset(pos.x, pos.y)
       val eOffset = pos.e
 
-      val stepPosXDest = (pos.x             * stepsPerMM.x).round
-      val stepPosYDest = (pos.y             * stepsPerMM.y).round
-      val stepPosZDest = ((pos.z + zOffset) * stepsPerMM.z).round
-      val stepPosEDest = ((pos.e + eOffset) * stepsPerMM.e).round
+      val stepPosXDest = (pos.x             * stepsPerMM.x           ).round
+      val stepPosYDest = (pos.y             * stepsPerMM.y           ).round
+      val stepPosZDest = ((pos.z + zOffset) * stepsPerMM.z           ).round
+      val stepPosEDest = ((pos.e + eOffset) * stepsPerMM.e * flowRate).round
 
       val dx = stepPosXDest - stepPosX
       val dy = stepPosYDest - stepPosY

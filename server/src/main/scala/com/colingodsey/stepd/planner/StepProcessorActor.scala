@@ -60,6 +60,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   def normal: Receive = {
     case trap: Trapezoid =>
       process(trap)
+
     case x: SetPos =>
       setPos(x)
       next ! x
@@ -69,6 +70,10 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
 
       flushChunk()
       next ! ZProbe
+    case a @ FlowRate(Some(x)) =>
+      flowRate = x / 100.0
+      log info s"setting flow rate scale to $flowRate"
+      next ! a
 
     case x: Command if x.isGCommand =>
       flushChunk()
