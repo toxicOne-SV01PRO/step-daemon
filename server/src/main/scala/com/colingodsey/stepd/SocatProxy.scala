@@ -89,17 +89,7 @@ class SocatProxy extends Actor with ActorLogging with Stash with LineParser with
     for (ref <- serialRef) ref ! Serial.PauseRead
   }
 
-  def paused: Receive = {
-    case PrintPipeline.PauseInput =>
-    case PrintPipeline.ResumeInput => resume()
-
-    case _ => stash()
-  }
-
-  def normal: Receive = {
-    case PrintPipeline.PauseInput => pause()
-    case PrintPipeline.ResumeInput =>
-
+  def common: Receive = {
     case Serial.Bytes(dat) =>
       //TODO: "sanitize '!' character"
       dat foreach process
@@ -107,9 +97,23 @@ class SocatProxy extends Actor with ActorLogging with Stash with LineParser with
     case TextResponse(str) if str.startsWith("ok N") =>
     case TextResponse(str) if str.startsWith("!") =>
     case TextResponse(str) =>
-      log.info("out: " + str)
+      log.info("out: {}", str)
       serialRef.get ! LineSerial.Bytes(str)
       serialRef.get ! LineSerial.Bytes("\n")
+  }
+
+  def paused: Receive = common orElse {
+    case PrintPipeline.PauseInput =>
+    case PrintPipeline.ResumeInput => resume()
+
+    case PrintPipeline.DeviceRestart => resume()
+
+    case _ => stash()
+  }
+
+  def normal: Receive = common orElse {
+    case PrintPipeline.PauseInput => pause()
+    case PrintPipeline.ResumeInput =>
   }
 
   def linking: Receive = {

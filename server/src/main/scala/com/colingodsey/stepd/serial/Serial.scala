@@ -38,7 +38,7 @@ object Serial {
   case object PauseRead extends FlowCommand
   case object ResumeRead extends FlowCommand
 
-  final val SerialReadSize = 128
+  final val SerialReadSize = 512
 
   /*
   NOTE: JSSC doesnt give us a good way to do an interruptible blocking read.
@@ -136,8 +136,6 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
   import Serial._
 
   val port = initPort
-  val buffer = new Array[Byte](1024)
-  val parent = context.parent
 
   val writer = context.actorOf(
     Props(classOf[Writer], port).withDispatcher("akka.io.pinned-dispatcher"),
@@ -172,7 +170,7 @@ class Serial(cfg: DeviceConfig) extends Actor with ActorLogging {
   //the exciting life of a proxy actor
   def receive = {
     case x: Serial.Bytes if sender == reader =>
-      parent ! x
+      context.parent ! x
     case x: Serial.Bytes =>
       writer ! x
     case x: FlowCommand =>

@@ -18,8 +18,8 @@ package com.colingodsey.stepd.serial
 
 import akka.actor._
 import akka.util.ByteString
-
 import com.colingodsey.stepd.GCode.Command
+import com.colingodsey.stepd.PrintPipeline
 import com.colingodsey.stepd.PrintPipeline.{Completed, Response, TextResponse}
 import com.colingodsey.stepd.planner.DeviceConfig
 
@@ -50,6 +50,7 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
     val check = bytes.foldLeft(0)(_ ^ _) & 0xFF
     val finalBytes = bytes ++ ByteString.fromString(s"*$check\r\n")
 
+    //log.info("send: {}*{} ({})", str0, check, pending.size)
     log.info("send: {}*{}", str0, check)
 
     lineSerial ! Serial.Bytes(finalBytes)
@@ -85,6 +86,13 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
     case x: Serial.FlowCommand =>
       lineSerial ! x
 
+    case PrintPipeline.DeviceRestart =>
+      log.info("Resetting command state")
+      pending = Map.empty
+
+    case a @ TextResponse(str) if str.startsWith("echo:start") =>
+      resetNumbering()
+      context.system.eventStream.publish(a)
     case a @ TextResponse(str) if str.startsWith("ok N") || str.startsWith("ok T") =>
       unstashAll()
 
@@ -104,19 +112,21 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
         pending -= n
       }
 
-      //goofy M105 response
+      def removeCmd(cmdStr: String) = pending.filter {
+        case (_, (_, cmd)) => cmd.raw.cmd == cmdStr
+      }.headOption match {
+        case Some((n, (ref, cmd))) =>
+          log.info("removing a pending {}", cmdStr)
+          ref ! Completed(cmd)
+          pending -= n
+        case _ =>
+      }
+
+      //goofy responses
       if(str.startsWith("ok T")) {
         context.system.eventStream.publish(a)
 
-        pending.filter {
-          case (_, (_, cmd)) => cmd.raw.cmd == "M105"
-        }.headOption match {
-          case Some((n, (ref, cmd))) =>
-            log.info("removing a pending M105")
-            ref ! Completed(cmd)
-            pending -= n
-          case _ =>
-        }
+        removeCmd("M105")
       }
     case TextResponse(str) if str.startsWith("ok N") =>
       log.warning("Got an ok for no reason: {}", str)

@@ -38,7 +38,7 @@ class LineSerial(cfg: DeviceConfig) extends Actor with ActorLogging with Stash {
     Props(classOf[Serial], cfg),
     name = "serial")
 
-  val dataBuffer = new Array[Byte](1024)
+  val dataBuffer = new Array[Byte](4096)
   var bufferIdx = 0
   var isControl = false
 

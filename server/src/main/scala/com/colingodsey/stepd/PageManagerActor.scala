@@ -82,9 +82,10 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
   var lastSent = Deadline.now
 
   var pendingCommands = 0
-  var sentChunkBytes = 0
+  var sentSteps = 0
   var nextFreePage = 0
   var hasStarted = false
+  var lastStats = Deadline.now
 
   var lastReportedSpeed = 0
   var lastReportedDirection = Seq(false, false, false, false)
@@ -116,9 +117,7 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
 
     val chunk = pageChunks(page)
 
-    //log.info("{} {}", chunk.rawBytes.length, chunk.meta)
-
-    sentChunkBytes += chunk.rawBytes.length
+    sentSteps += chunk.meta.steps getOrElse 1024
 
     context.parent ! LineSerial.Bytes(chunk.produceBytes(page, testCorrupt))
   }
@@ -272,7 +271,7 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
       for (i <- 0 until NumPages) pageStates += i -> PageState.Free
 
       doPauseCheck()
-    case TextResponse(str) if str.startsWith("echo:start") && hasStarted =>
+    case TextResponse(str) if str.contains("echo:start") && hasStarted =>
       log.error("Printer restarted!")
       context stop self
     case TextResponse(_) =>
@@ -310,12 +309,15 @@ class PageManagerActor extends Actor with ActorLogging with Timers {
     case HealthCheck =>
 
     case Stats =>
-      val bytesPerSec = (sentChunkBytes * 1000.0 / 5.0).toInt / 1000.0
+      val now = Deadline.now
+      val d = now - lastStats
+      val stepsPerSec = (sentSteps * 1000 / d.toMillis).toInt
 
-      sentChunkBytes = 0
+      sentSteps = 0
+      lastStats = now
 
-      if (bytesPerSec > 0) {
-        log.info("Chunk bytes/s: {}", bytesPerSec)
+      if (stepsPerSec > 0) {
+        log.info("steps/s: {}", stepsPerSec)
       }
   }
 

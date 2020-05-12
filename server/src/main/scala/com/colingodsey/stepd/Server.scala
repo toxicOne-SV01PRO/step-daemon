@@ -74,7 +74,9 @@ class PrintPipeline(proxy: ActorRef, device: ActorRef) extends Actor with ActorL
 
   context.system.eventStream.subscribe(self, classOf[Command])
 
-  device ! SerialDeviceActor.ResetNumbering
+  //device ! SerialDeviceActor.ResetNumbering
+  device ! DeviceRestart
+  proxy ! DeviceRestart
 
   log.info("Pipeline started, draining for 2 seconds")
 
