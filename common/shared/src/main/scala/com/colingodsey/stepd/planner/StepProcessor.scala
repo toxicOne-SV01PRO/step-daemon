@@ -236,7 +236,7 @@ abstract class StepProcessor(format: StepProcessor.PageFormat) {
     }
   }
 
-  def process(trap: Trapezoid): Unit = {
+  def process(trap: MotionBlock): Unit = {
     val iter = trap.posIterator(ticksPerSecond.toDouble / StepsPerSegment)
 
     //run at actual tick rate

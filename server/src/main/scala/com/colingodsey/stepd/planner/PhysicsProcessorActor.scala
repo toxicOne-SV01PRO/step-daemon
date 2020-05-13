@@ -38,7 +38,7 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
       log.debug("fault: {}", fault.toString)
   }
 
-  def process(trap: Trapezoid): Unit = next ! trap
+  def process(trap: MotionBlock): Unit = next ! trap
 
   def endTrapAndContinue(cmd: Any): Unit = {
     //send an empty move so we can finish the pending trap, maintain linearization

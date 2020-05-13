@@ -61,7 +61,7 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
   }
 
   def normal: Receive = {
-    case trap: Trapezoid =>
+    case trap: MotionBlock =>
       process(trap)
 
     case x: MeshLeveling.Reader =>

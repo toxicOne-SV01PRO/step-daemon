@@ -35,7 +35,7 @@ trait PhysicsProcessor {
 
   def recordFault(fault: MathFault): Unit
 
-  def process(trap: Trapezoid): Unit
+  def process(trap: MotionBlock): Unit
 
   def maxResizes = MaxResizes
 
@@ -108,7 +108,7 @@ trait PhysicsProcessor {
     require(frAccel >= 0)
     require(frDeccel <= 0)
 
-    process(Trapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd))
+    process(VTrapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd))
   }
 
   def createTrapezoidSafe(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta, maxTimes: Int = maxResizes): Unit = {

@@ -56,10 +56,9 @@ object DummyTest extends TestSuite {
       val acc = Vec4(2000, 1500, 100, 10000)
       val jerk = Vec4(15, 10, 0.4f, 5)
 
-      var trap: Trapezoid = null
+      var trap: MotionBlock = null
 
-
-      def process(trap: Trapezoid): Unit = this.trap = trap
+      def process(trap: MotionBlock): Unit = this.trap = trap
 
       def recordLookaheadHalt(): Unit = {}
 
@@ -110,7 +109,7 @@ object DummyTest extends TestSuite {
         1
       )
 
-      val trap = Trapezoid(0.5f, 0.1f, delta, -0.1f, 0.5f)
+      val trap = VTrapezoid(0.5f, 0.1f, delta, -0.1f, 0.5f)
       //val trap = Trapezoid(0f, 0.1f, delta, -0.1f, 0f)
 
       println(trap.accelTime, trap.coastTime, trap.deccelTime, trap.time)
