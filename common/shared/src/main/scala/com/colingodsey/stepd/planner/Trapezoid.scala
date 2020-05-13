@@ -20,11 +20,11 @@ import com.colingodsey.stepd.Math._
 
 final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double) {
   val accelDf = move.f - frStart
-  val accelTime = if(frAccel == 0) 0.0 else accelDf / frAccel
+  val accelTime = if (frAccel == 0) 0.0 else accelDf / frAccel
   val accelDist = frAccel * accelTime * accelTime * 0.5 + frStart * accelTime
 
   val deccelDf = frEnd - move.f
-  val deccelTime = if(frDeccel == 0) 0.0 else deccelDf / frDeccel
+  val deccelTime = if (frDeccel == 0) 0.0 else deccelDf / frDeccel
   val deccelDist = frDeccel * deccelTime * deccelTime * 0.5 + move.f * deccelTime
 
   val coastDist = move.length - deccelDist - accelDist
@@ -40,8 +40,8 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
   //if(accelDist > halfDist) throw PreEaseLimit
   //if(deccelDist > halfDist) throw PostEaseLimit
 
-  if((accelDist + deccelDist) > move.length) {
-    if(accelDist > deccelDist) throw PreEaseLimit
+  if ((accelDist + deccelDist) > move.length) {
+    if (accelDist > deccelDist) throw PreEaseLimit
     else throw PostEaseLimit
   }
 
@@ -53,7 +53,7 @@ final case class Trapezoid(frStart: Double, frAccel: Double, move: MoveDelta, fr
   def getPos(t: Double): Double = {
     val ret = if (t < accelTime) {
       frAccel * t * t * 0.5 + frStart * t
-    } else if(t >= deccelStartTime) {
+    } else if (t >= deccelStartTime) {
       val dt = t - deccelStartTime
 
       deccelPos + frDeccel * dt * dt * 0.5 + move.f * dt

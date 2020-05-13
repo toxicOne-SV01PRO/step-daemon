@@ -61,7 +61,7 @@ trait PhysicsProcessor {
     post.isValid && accelDist >= (post.length * 0.5)
   }
 
-  /*
+  /**
   Use the inner (dot) product of the 4d vectors to determine jerk, accel, and junction feed rate.
 
   For the junction fr, the dot product of the 2 movement vectors is taken, and clamped to [0, 1].
@@ -79,13 +79,13 @@ trait PhysicsProcessor {
   def createTrapezoid(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta): Unit = {
     val dvStart = moveDelta.v - pre.v
     val frMaxStart = math.min(moveDelta.f, pre.f)
-    val frStart = if(pre.isValid) frMaxStart * {
+    val frStart = if (pre.isValid) frMaxStart * {
       val f = pre.d.normal ⋅ moveDelta.d.normal
       val jf = dvStart.abs ⋅ jerk.normal
 
       //TODO: use jerk factor as lower bounds for clamp? scaled for the fr...
 
-      if(jf < jerk.length) 1.0
+      if (jf < jerk.length) 1.0
       else clamp(0.0, f, 1.0)
     } else 0.0
 
@@ -93,24 +93,22 @@ trait PhysicsProcessor {
 
     val dvEnd = post.v - moveDelta.v
     val frMaxEnd = math.min(moveDelta.f, post.f)
-    val frEnd = if(post.isValid) frMaxEnd * {
+    val frEnd = if (post.isValid) frMaxEnd * {
       val f = moveDelta.d.normal ⋅ post.d.normal
       val jf = dvEnd.abs ⋅ jerk.normal
 
-      if(jf < jerk.length) 1.0
+      if (jf < jerk.length) 1.0
       else clamp(0.0, f, 1.0)
     } else 0.0
 
     val frDeccel = -frAccel
 
-    if(willStartFrCauseResize(frEnd, post)) throw LookaheadFault
+    if (willStartFrCauseResize(frEnd, post)) throw LookaheadFault
 
     require(frAccel >= 0)
     require(frDeccel <= 0)
 
-    val trap = Trapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd)
-
-    process(trap)
+    process(Trapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd))
   }
 
   def createTrapezoidSafe(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta, maxTimes: Int = maxResizes): Unit = {

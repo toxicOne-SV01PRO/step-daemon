@@ -39,24 +39,7 @@ import scala.util.control.NoStackTrace
  *
  * device -> publish(ControlResponse) -> pages
  */
-object PrintPipeline {
-  sealed trait Signal
-
-  sealed trait InputFlowSignal extends Signal
-  case object PauseInput extends InputFlowSignal
-  case object ResumeInput extends InputFlowSignal
-
-  case class Completed(cmd: Command)
-
-  sealed trait Response
-  case class TextResponse(str: String) extends Response
-  case class ControlResponse(data: ByteString) extends Response
-
-  //TODO: send event over bus, let persistent actors reset state safeleft
-  case object DeviceRestart
-}
-
-class PrintPipeline(proxy: ActorRef, device: ActorRef) extends Actor with ActorLogging {
+class PrintPipelineActor(proxy: ActorRef, device: ActorRef) extends Actor with ActorLogging {
   import PrintPipeline._
 
   val chunkManager = context.actorOf(Props[PageManagerActor], name="pages")
@@ -129,6 +112,6 @@ object Server extends App {
     val proxy = system.actorOf(Props(classOf[SocatProxy]), name="proxy")
 
     system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-level")
-    system.actorOf(Props(classOf[PrintPipeline], proxy, device), name="pipeline")
+    system.actorOf(Props(classOf[PrintPipelineActor], proxy, device), name="pipeline")
   }
 }
