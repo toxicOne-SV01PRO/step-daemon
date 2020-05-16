@@ -128,8 +128,8 @@ object Pieces {
       else head.int2At(dt, c0, 0)
 
     def int2At(dt: Double, c0: Double, c1: Double): Double =
-      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, c0 + int2At(dtTailStart, 0, c1), int1At(dtTailStart, 0) + c1, apply(dtTailStart))
-      else if (dt > head.dt) middle.int2At(dt - head.dt, c0 + int2At(head.dt, 0, c1), int1At(head.dt, 0) + c1)
+      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, int2At(dtTailStart, c0, c1), int1At(dtTailStart, c1), apply(dtTailStart))
+      else if (dt > head.dt) middle.int2At(dt - head.dt, int2At(head.dt, c0, c1), int1At(head.dt, c1))
       else head.int3At(dt, c0, c1, 0)
 
     def int3At(dt: Double, c0: Double, c1: Double, c2: Double) = Double.NaN
