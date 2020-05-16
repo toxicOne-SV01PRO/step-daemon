@@ -122,10 +122,11 @@ object Pieces {
   case class Trapezoid(head: Piece, tail: Piece, area: Double) extends Piece {
     // one order lower than head and tail
     val headArea = head.int2(0)
-    val tailArea = tail.int2(0)
+    val tailArea = tail.int2(head.int1())
     val middle = Pulse(head.int1(), area - headArea - tailArea)
 
-    require((headArea + tailArea) <= area)
+    //require((headArea + tailArea) <= area, s"head: $headArea, tail: $tailArea, area: $area")
+    println(s"head: $headArea, tail: $tailArea, area: $area")
 
     val dtTailStart = head.dt + middle.dt
     val dt = dtTailStart + tail.dt
@@ -137,13 +138,13 @@ object Pieces {
       else head.int1At(dt)
 
     def int1At(dt: Double): Double =
-      if (dt > dtTailStart) tail.int2At(dt - dtTailStart, middle.dy) + int1At(dtTailStart)
+      if (dt > dtTailStart) tail.int2At(dt - dtTailStart, apply(dtTailStart)) + int1At(dtTailStart)
       else if (dt > head.dt) middle.int1At(dt - head.dt) + int1At(head.dt)
       else head.int2At(dt, 0)
 
     def int2At(dt: Double, c1: Double): Double =
-      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, int1At(dtTailStart) + c1, middle.dy) + int2At(dtTailStart, c1)
-      else if (dt > head.dt) middle.int2At(dt - head.dt, head.int2(c1)) + int2At(head.dt, c1)
+      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, int1At(dtTailStart) + c1, apply(dtTailStart)) + int2At(dtTailStart, c1)
+      else if (dt > head.dt) middle.int2At(dt - head.dt, int1At(head.dt) + c1) + int2At(head.dt, c1)
       else head.int3At(dt, c1, 0)
 
     def int3At(dt: Double, c1: Double, c2: Double) = Double.NaN

@@ -28,7 +28,7 @@ import scala.util.control.NonFatal
 
 object PieceTest extends TestSuite {
   def draw(shape: Trapezoid, name: String): Unit = {
-    val nx = 400
+    val nx = 800
     val dt = shape.dt
     val dx = dt / nx
 
@@ -82,15 +82,14 @@ object PieceTest extends TestSuite {
         Trapezoid(
           Pulse(4, 5),
           Pulse(-4, -5),
-          20
+          10
         ),
         Trapezoid(
-          Pulse(4, 5),
           Pulse(-4, -5),
-          20
+          Pulse(4, 5),
+          -10
         ),
-        //Pulse(-5, -20),
-        200
+        50
       )
 
       draw(shape0, "atrap-test.png")
