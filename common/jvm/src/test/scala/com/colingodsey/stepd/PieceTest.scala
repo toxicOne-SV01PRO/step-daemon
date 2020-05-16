@@ -35,8 +35,8 @@ object PieceTest extends TestSuite {
     val img = new BufferedImage(nx, nx, BufferedImage.TYPE_INT_RGB)
 
     def int0vals = for (i <- 0 until nx) yield i -> shape(i * dx)
-    def int1vals = for (i <- 0 until nx) yield i -> shape.int1At(i * dx)
-    def int2vals = for (i <- 0 until nx) yield i -> shape.int2At(i * dx, 0)
+    def int1vals = for (i <- 0 until nx) yield i -> shape.int1At(i * dx, 0)
+    def int2vals = for (i <- 0 until nx) yield i -> shape.int2At(i * dx, 0, 0)
 
     def drawPoints(vals: Seq[(Int, Double)], color: Int) = {
       val min = 0 //vals.map(_._2).min

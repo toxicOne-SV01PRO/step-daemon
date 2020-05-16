@@ -61,18 +61,18 @@ object Pieces {
 
     def apply(dt: Double): Double
 
-    def int1At(dt: Double): Double
-    def int2At(dt: Double, c1: Double): Double
-    def int3At(dt: Double, c1: Double, c2: Double): Double
+    def int1At(dt: Double, c0: Double): Double
+    def int2At(dt: Double, c0: Double, c1: Double): Double
+    def int3At(dt: Double, c0: Double, c1: Double, c2: Double): Double
 
     def apply(): Double = apply(dt)
 
-    def int1(): Double = int1At(dt)
-    def int2(c1: Double): Double = int2At(dt, c1)
-    def int3(c1: Double, c2: Double): Double = int3At(dt, c1, c2)
+    def int1(c0: Double): Double = int1At(dt, c0)
+    def int2(c0: Double, c1: Double): Double = int2At(dt, c0, c1)
+    def int3(c0: Double, c1: Double, c2: Double): Double = int3At(dt, c0, c1, c2)
 
-    def int2(): Double = int2(0)
-    def int3(): Double = int3(0, 0)
+    //def int2(): Double = int2(0)
+    //def int3(): Double = int3(0, 0)
   }
 
   /**
@@ -82,34 +82,19 @@ object Pieces {
    * @param dy - N+1 order slope
    * @param int1 - N order first integral
    */
-  //TODO: should int1 be renamed area again? or how do we ignore c again. should this just be Line, with a dest?
-  /*case class Pulse(c: Double, dy: Double, int1: Double) extends Piece {
-    val dt = if (dy == 0.0) 0.0 else (int1 - c) / dy
-
-    val int2 = int2At(dt, 0)
-    val int3 = int3At(dt, 0, 0)
-
-    def apply(dt: Double): Double = dy
-
-    def int1At(dt: Double) =
-       c + dy * dt
-    def int2At(dt: Double, c0: Double) =
-      c0 +  c * dt + dy * dt * dt / 2.0
-    def int3At(dt: Double, c0: Double, c1: Double) =
-      c0 + c1 * dt +  c * dt * dt / 2.0 + dy * dt * dt * dt / 6.0
-  }*/
-
   case class Pulse(dy: Double, area: Double) extends Piece {
     val dt = if (dy == 0.0) 0.0 else area / dy
 
+    val isValid = dt >= 0
+
     def apply(dt: Double): Double = dy
 
-    def int1At(dt: Double) =
-      dy * dt
-    def int2At(dt: Double, c1: Double) =
-      c1 * dt + dy * dt * dt / 2.0
-    def int3At(dt: Double, c1: Double, c2: Double) =
-      c1 * dt + c2 * dt * dt / 2.0 + dy * dt * dt * dt / 6.0
+    def int1At(dt: Double, c0: Double) =
+      c0 + dy * dt
+    def int2At(dt: Double, c0: Double, c1: Double) =
+      c0 + c1 * dt + dy * dt * dt / 2.0
+    def int3At(dt: Double, c0: Double, c1: Double, c2: Double) =
+      c0 + c1 * dt + c2 * dt * dt / 2.0 + dy * dt * dt * dt / 6.0
   }
 
   /**
@@ -121,9 +106,9 @@ object Pieces {
    */
   case class Trapezoid(head: Piece, tail: Piece, area: Double) extends Piece {
     // one order lower than head and tail
-    val headArea = head.int2(0)
-    val tailArea = tail.int2(head.int1())
-    val middle = Pulse(head.int1(), area - headArea - tailArea)
+    val headArea = head.int2(0, 0)
+    val tailArea = tail.int2(0, head.int1(0))
+    val middle = Pulse(head.int1(0), area - headArea - tailArea)
 
     //require((headArea + tailArea) <= area, s"head: $headArea, tail: $tailArea, area: $area")
     println(s"head: $headArea, tail: $tailArea, area: $area")
@@ -133,21 +118,21 @@ object Pieces {
 
     //TODO: each piece needs to reference the last piece for its c values
     def apply(dt: Double): Double =
-      if (dt > dtTailStart) tail.int1At(dt - dtTailStart) + apply(dtTailStart)
+      if (dt > dtTailStart) tail.int1At(dt - dtTailStart, 0) + apply(dtTailStart)
       else if (dt > head.dt) apply(head.dt)
-      else head.int1At(dt)
+      else head.int1At(dt, 0)
 
-    def int1At(dt: Double): Double =
-      if (dt > dtTailStart) tail.int2At(dt - dtTailStart, apply(dtTailStart)) + int1At(dtTailStart)
-      else if (dt > head.dt) middle.int1At(dt - head.dt) + int1At(head.dt)
-      else head.int2At(dt, 0)
+    def int1At(dt: Double, c0: Double): Double =
+      if (dt > dtTailStart) tail.int2At(dt - dtTailStart, 0, apply(dtTailStart)) + int1At(dtTailStart, 0)
+      else if (dt > head.dt) middle.int1At(dt - head.dt, 0) + int1At(head.dt, 0)
+      else head.int2At(dt, 0, 0)
 
-    def int2At(dt: Double, c1: Double): Double =
-      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, int1At(dtTailStart) + c1, apply(dtTailStart)) + int2At(dtTailStart, c1)
-      else if (dt > head.dt) middle.int2At(dt - head.dt, int1At(head.dt) + c1) + int2At(head.dt, c1)
-      else head.int3At(dt, c1, 0)
+    def int2At(dt: Double, c0: Double, c1: Double): Double =
+      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, 0, int1At(dtTailStart, 0) + c1, apply(dtTailStart)) + int2At(dtTailStart, 0, c1)
+      else if (dt > head.dt) middle.int2At(dt - head.dt, 0, int1At(head.dt, 0) + c1) + int2At(head.dt, 0, c1)
+      else head.int3At(dt, 0, c1, 0)
 
-    def int3At(dt: Double, c1: Double, c2: Double) = Double.NaN
+    def int3At(dt: Double, c0: Double, c1: Double, c2: Double) = Double.NaN
   }
 }
 
