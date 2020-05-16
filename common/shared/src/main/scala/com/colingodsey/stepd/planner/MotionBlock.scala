@@ -116,21 +116,21 @@ object Pieces {
     val dtTailStart = head.dt + middle.dt
     val dt = dtTailStart + tail.dt
 
-    //TODO: each piece needs to reference the last piece for its c values
+    //each piece needs to reference the last piece for its cX values
     def apply(dt: Double): Double =
-      if (dt > dtTailStart) tail.int1At(dt - dtTailStart, 0) + apply(dtTailStart)
+      if (dt > dtTailStart) tail.int1At(dt - dtTailStart, apply(dtTailStart))
       else if (dt > head.dt) apply(head.dt)
       else head.int1At(dt, 0)
 
     def int1At(dt: Double, c0: Double): Double =
-      if (dt > dtTailStart) tail.int2At(dt - dtTailStart, 0, apply(dtTailStart)) + int1At(dtTailStart, 0)
-      else if (dt > head.dt) middle.int1At(dt - head.dt, 0) + int1At(head.dt, 0)
-      else head.int2At(dt, 0, 0)
+      if (dt > dtTailStart) tail.int2At(dt - dtTailStart, int1At(dtTailStart, c0), apply(dtTailStart))
+      else if (dt > head.dt) middle.int1At(dt - head.dt, int1At(head.dt, c0))
+      else head.int2At(dt, c0, 0)
 
     def int2At(dt: Double, c0: Double, c1: Double): Double =
-      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, 0, int1At(dtTailStart, 0) + c1, apply(dtTailStart)) + int2At(dtTailStart, 0, c1)
-      else if (dt > head.dt) middle.int2At(dt - head.dt, 0, int1At(head.dt, 0) + c1) + int2At(head.dt, 0, c1)
-      else head.int3At(dt, 0, c1, 0)
+      if (dt > dtTailStart) tail.int3At(dt - dtTailStart, c0 + int2At(dtTailStart, 0, c1), int1At(dtTailStart, 0) + c1, apply(dtTailStart))
+      else if (dt > head.dt) middle.int2At(dt - head.dt, c0 + int2At(head.dt, 0, c1), int1At(head.dt, 0) + c1)
+      else head.int3At(dt, c0, c1, 0)
 
     def int3At(dt: Double, c0: Double, c1: Double, c2: Double) = Double.NaN
   }
