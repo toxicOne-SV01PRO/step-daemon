@@ -18,6 +18,7 @@ package com.colingodsey.stepd
 
 import com.colingodsey.stepd.Math.Vec4
 import com.colingodsey.stepd.planner.StepProcessor
+
 import utest._
 
 object CartesianTest extends TestSuite {
@@ -39,7 +40,7 @@ object CartesianTest extends TestSuite {
   }
 
   val tests = this {
-    "Raw iterator" - {
+    /*"Raw iterator" - {
       val itr0 = new FrogIterator
       val itr = CartesianDeltaIterator(itr0)
 
@@ -69,6 +70,6 @@ object CartesianTest extends TestSuite {
       }
 
       println("last pos: " + realPos)
-    }
+    } */
   }
 }
