@@ -66,33 +66,83 @@ object PieceTest extends TestSuite {
     ImageIO.write(img, "PNG", new File(name))
   }
 
+  val jerk = 10
+
+  val accel = 2.5
+  val deccel = -accel
+
+  val dvStart = 5
+  val dvEnd = -10
+
+  val startV = 5
+  val dist = 50
+
+  /*val accel = 2441.86
+  val deccel = -accel
+
+  val dvStart = 22.4 - 0
+  val dvEnd = 21.938 - 22.4
+
+  val startV = 0
+  val dist = 1.5*/
+
   val tests = Tests {
     test("vtrap test") {
       val shape = Trapezoid(
-        Pulse(5, 10),
-        Pulse(-5, -10),
-        50
+        Pulse(accel, dvStart),
+        Pulse(deccel, dvEnd),
+        dist,
+        startV
       )
 
       draw(shape, "vtrap-test.png")
     }
 
     test("atrap test") {
-      val shape0 = Trapezoid(
-        Trapezoid(
-          Pulse(4, 5),
-          Pulse(-4, -5),
-          10
-        ),
-        Trapezoid(
-          Pulse(-4, -5),
-          Pulse(4, 5),
-          -10
-        ),
-        50
+      val head = Trapezoid(
+        Pulse(jerk, accel),
+        Pulse(-jerk, -accel),
+        dvStart
       )
 
-      draw(shape0, "atrap-test.png")
+      val tail = Trapezoid(
+        Pulse(-jerk, deccel),
+        Pulse(jerk, -deccel),
+        dvEnd
+      )
+
+      val shape = Trapezoid(
+        head,
+        tail,
+        dist,
+        startV
+      )
+
+      try {
+        require(head.head.isValid, "head head not valid: " + head.head)
+        require(head.middle.isValid, "head middle not valid: " + head.middle)
+        require(head.tail.isValid, "head tail not valid: " + head.tail)
+      } catch {
+        case NonFatal(t) =>
+          println(head)
+          throw t
+      }
+
+      require(shape.middle.isValid, "middle not valid")
+
+      try {
+        require(tail.head.isValid, "tail head not valid: " + tail.head)
+        require(tail.middle.isValid, "tail middle not valid: " + tail.middle)
+        require(tail.tail.isValid, "tail tail not valid: " + tail.tail)
+      } catch {
+        case NonFatal(t) =>
+          println(tail)
+          throw t
+      }
+
+      require(shape.isValid)
+
+      draw(shape, "atrap-test.png")
     }
   }
 }

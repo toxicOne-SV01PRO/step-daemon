@@ -55,6 +55,7 @@ object DummyTest extends TestSuite {
       //val acc: Accel = Position.One * 0.01f
       val acc = Vec4(2000, 1500, 100, 10000)
       val jerk = Vec4(15, 10, 0.4f, 5)
+      val sJerk = Vec4.One * 1e10
 
       var trap: MotionBlock = null
 
@@ -85,7 +86,7 @@ object DummyTest extends TestSuite {
         val preDelta = if(i == 0) delta else deltas(i - 1)
         val postDelta = if(i == (deltas.length - 1)) delta else deltas(i + 1)
 
-        phase.createTrapezoidSafe(preDelta, delta, postDelta, 5)
+        phase.createTrapezoidSafe(preDelta, delta, postDelta, maxTimes = 5)
 
         val trap = phase.trap
         var dt = 0.0
@@ -112,7 +113,7 @@ object DummyTest extends TestSuite {
       val trap = VTrapezoid(0.5f, 0.1f, delta, -0.1f, 0.5f)
       //val trap = Trapezoid(0f, 0.1f, delta, -0.1f, 0f)
 
-      println(trap.accelTime, trap.coastTime, trap.deccelTime, trap.time)
+      //println(trap.accelTime, trap.coastTime, trap.deccelTime, trap.time)
 
       val tick = 0.001f
 

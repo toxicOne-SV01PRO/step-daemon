@@ -21,6 +21,7 @@ import com.colingodsey.stepd.Math.Vec4
 case class PlannerConfig(
     accel: Vec4,
     jerk: Vec4,
+    sJerk: Vec4,
     stepsPerMM: Vec4,
     ticksPerSecond: Int,
     format: StepProcessor.PageFormat

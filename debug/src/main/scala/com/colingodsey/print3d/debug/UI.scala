@@ -16,29 +16,24 @@
 
 package com.colingodsey.print3d.debug
 
-import java.util.Scanner
-
 import javafx.animation.AnimationTimer
 import javafx.application.Application
-import javafx.event.ActionEvent
-import javafx.event.EventHandler
 import javafx.scene.Scene
-import javafx.scene.control.Button
-import javafx.scene.control.Label
 import javafx.scene.layout.StackPane
 import javafx.scene.paint.Color
 import javafx.scene.shape.Circle
 import javafx.stage.Stage
 import akka.actor._
 import akka.util.ByteString
-import com.colingodsey.print3d._
-import com.colingodsey.stepd
+import com.colingodsey.print3d.debug.UI.system
 import com.colingodsey.stepd.GCode.{Command, SetPos}
 import com.colingodsey.stepd._
 import com.colingodsey.stepd.Math._
+import com.colingodsey.stepd.PrintPipeline.{PauseInput, ResumeInput}
 import com.colingodsey.stepd.planner.StepProcessor.PageFormat
 import com.colingodsey.stepd.planner._
 
+import scala.collection.mutable
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -48,7 +43,8 @@ class UI extends Application {
   var trapIdx = 0
   var lastPos = Vec4.Zero
 
-  val speedScale = 1.0
+  val speedScale = 0.5
+  val spatialScale = 10.0 // 20.0
 
   val root = new StackPane
   val scene = new Scene(root, 800, 600)
@@ -62,7 +58,7 @@ class UI extends Application {
 
       if(MovementProcessor.f != null) {
         MovementProcessor.f(dt * speedScale) foreach { x =>
-          //if(math.random < 0.05) println(x)
+          if(math.random < 0.05) println(x)
           pos = x
         }
       }
@@ -94,40 +90,17 @@ class UI extends Application {
     val b = math.max(math.min(c - 1024, 255), 0)
 
     circle.setFill(Color.rgb(r - b, g, b))
-    circle.setTranslateX((pos.x - 100) * 20)
-    circle.setTranslateY((pos.y - 100) * 20)
+    circle.setTranslateX((pos.x - 100) * spatialScale)
+    circle.setTranslateY((pos.y - 100) * spatialScale)
 
     lastPos = pos
   }
 }
 
 object UI extends App {
-  //val acc = Vec4(2000, 1500, 100, 10000) //current settings
-  //val jerk = Vec4(15, 10, 0.4f, 5)
-
-  //val acc = Vec4(1500, 1000, 100, 10000)
-  //val jerk = Vec4(7, 5, 0.2, 2.5)
-
   val system = ActorSystem()
 
-  val movement = system.actorOf(Props(classOf[MovementProcessor]), name="motion-ui")
-  val steps = system.actorOf(Props(classOf[StepProcessorActor], movement, ConfigMaker.plannerConfig), name="steps")
-  val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
-
-  /*val movement = system.actorOf(Props(classOf[MovementProcessorPos]), name="motion-ui")
-  val physics = system.actorOf(Props(classOf[PhysicsProcessorActor], movement, acc, jerk), name="physics")*/
-
-  val delta = system.actorOf(Props(classOf[DeltaProcessorActor], physics, true), name="delta")
-
-  //val serial = system.actorOf(Props(classOf[LineSerial]), name="print-serial")
-  //val gcodeSerial = system.actorOf(Props(classOf[SerialGCode], serial), name="gcode-serial")
-
-  //val serialTest = system.actorOf(Props(classOf[SerialTest], gcodeSerial, serial), name="serial-test")
-
-  //val commands = system.actorOf(Props(classOf[CommandStreamer], delta), name="commands")
-  val proxy = system.actorOf(Props(classOf[SocatProxy], delta), name="proxy")
-
-  val bedlevel = system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
+  system.actorOf(Props[UIActor], name="pipeline")
 
   sys.addShutdownHook {
     system.terminate()
@@ -136,104 +109,69 @@ object UI extends App {
   }
 
   Application.launch(classOf[UI], args: _*)
-
-  /*import system.dispatcher
-
-  system.scheduler.schedule(5.seconds, 10.millis) {
-    if(MovementProcessor.f != null) {
-      MovementProcessor.f(10.0 / 1000)
-    }
-  }*/
 }
 
-/*class SerialTest(gcodeSerial: ActorRef, rawSerial: ActorRef) extends Actor with ActorLogging {
-  import context.dispatcher
+class UIActor extends Actor {
+  val movement = context.actorOf(Props(classOf[MovementProcessor]), name="motion-ui")
+  val steps = context.actorOf(Props(classOf[StepProcessorActor], movement, ConfigMaker.plannerConfig), name="steps")
+  val physics = context.actorOf(Props(classOf[PhysicsProcessorActor], steps, ConfigMaker.plannerConfig), name="physics")
+  val delta = context.actorOf(Props(classOf[DeltaProcessorActor], physics, true), name="delta")
 
-  val testCode = SerialGCode.Command("M105")
+  val proxy = context.actorOf(Props[SocatProxy], name="proxy")
+  val bedlevel = context.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-leveling")
 
-  var started = false
-  var bytesSent = 0
-  var lastTime = Deadline.now
-  var pendingChunks = 0
-  var codesSent = 0
+  override val supervisorStrategy = SupervisorStrategy.stoppingStrategy
 
-  context.system.scheduler.schedule(10.seconds, 10.second, self, Report)
+  var pausers = Set[ActorRef]()
 
-  gcodeSerial ! LineSerial.Subscribe
+  context.children foreach context.watch
 
-  def testChunk = {
-    val bytes = (0 until 256).map(_ => (math.random * 256).toByte)
-    //val bytes = (0 until 256).map(_ => 'A'.toByte)
+  context.system.eventStream.subscribe(self, classOf[Command])
 
-    Chunk(ByteString.empty ++ bytes)
-  }
+  checkPause()
 
-  def sendChunk(nDone: Int): Unit = {
-    pendingChunks -= nDone
+  def checkPause(): Unit = {
+    val msg = if (pausers.isEmpty) ResumeInput else PauseInput
 
-    while(pendingChunks < 1) {
-      val chunk = testChunk
-
-      bytesSent += chunk.length
-
-      rawSerial ! LineSerial.Bytes(chunk.chunk)
-
-      pendingChunks += 1
-    }
+    proxy ! msg
   }
 
   def receive = {
-    case LineSerial.Response("looptest") =>
-      scala.concurrent.blocking(Thread.sleep(5000))
-      started = true
-      log.info("started")
-      sendChunk(0)
-      gcodeSerial ! testCode
-    case LineSerial.Response(str) if str.startsWith("!busy") =>
-      log.debug("chunk {}", str)
-      sendChunk(1)
-    case LineSerial.Response(str) if str.startsWith("!ok") =>
-      log.debug("chunk {}", str)
-      sendChunk(1)
-    case LineSerial.Response(str) if str.startsWith("!fail") =>
-      log.info("chunk {}", str)
-      sendChunk(1)
-    case LineSerial.Response(str) =>
-      log.info("recv: {}", str)
-    case SerialGCode.Completed(`testCode`) =>
-      gcodeSerial ! testCode
-      codesSent += 1
-    case Report =>
-      val now = Deadline.now
-      val dt = now - lastTime
-      val dts = dt.toMillis / 1000.0
-      val bps = bytesSent / dts * 8
-      val cps = codesSent / dts
+    case Terminated(_) =>
+      sys.error("Child terminated, restarting pipeline")
+      system.terminate()
 
-      log.info("bps {} codes {}", bps.toInt, cps.toInt)
+    // input flow control
+    case PauseInput =>
+      pausers += sender
+      checkPause()
+    case ResumeInput =>
+      pausers -= sender
+      checkPause()
 
-      gcodeSerial ! SerialGCode.Command("M114")
-
-      lastTime = now
-      bytesSent = 0
-      codesSent = 0
+    case x: Command => delta.tell(x, sender)
   }
 
-  object Report
-}*/
+  override def postStop(): Unit = {
+    super.postStop()
+    system.terminate()
+  }
+}
 
 object MovementProcessor {
   var f: Double => Option[Vec4] = null
 }
 
-class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline.Terminator {
+class MovementProcessor extends Actor with ActorLogging {
   import com.colingodsey.stepd.Math._
 
   val stepsPer = ConfigMaker.plannerConfig.stepsPerMM
   val ticksPerSecond = ConfigMaker.plannerConfig.ticksPerSecond
   val format = ConfigMaker.plannerConfig.format
 
-  var ticks = 0.0
+  val stash = mutable.Queue[Any]()
+
+  var ticks = 180.0 * ticksPerSecond / format.StepsPerSegment
   var idx = 0
 
   var curChunk: ByteString = null
@@ -247,7 +185,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
   var z = 0L
   var e = 0L
 
-  @volatile var pos = Vec4.Zero
+  @volatile var pos = Vec4.Zero //(100, 100, 5, 0)
 
   MovementProcessor.f = getPos(_)
 
@@ -274,16 +212,30 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
         e += eRaw - 7
 
         idx += 8
+      case PageFormat.SP_4x2_256 =>
+        val byte = curChunk(idx >> 2) & 0xFF
+
+        val xRaw = (byte >> 6) & 0x3
+        val yRaw = (byte >> 4) & 0x3
+        val zRaw = (byte >> 2) & 0x3
+        val eRaw = (byte >> 0) & 0x3
+
+        x += xRaw * getDirectionScale(0)
+        y += yRaw * getDirectionScale(1)
+        z += zRaw * getDirectionScale(2)
+        e += eRaw * getDirectionScale(3)
+
+        idx += 4
       case PageFormat.SP_4x1_512 =>
         val byte = curChunk(idx >> 1) & 0xFF
         val isLow = (idx & 0x1) == 0
 
         val nibble = if(isLow) byte & 0xF else byte >> 4
 
-        val xRaw = (nibble >> 0) & 0x1
-        val yRaw = (nibble >> 1) & 0x1
-        val zRaw = (nibble >> 2) & 0x1
-        val eRaw = (nibble >> 3) & 0x1
+        val xRaw = (nibble >> 3) & 0x1
+        val yRaw = (nibble >> 2) & 0x1
+        val zRaw = (nibble >> 1) & 0x1
+        val eRaw = (nibble >> 0) & 0x1
 
         x += xRaw * getDirectionScale(0)
         y += yRaw * getDirectionScale(1)
@@ -299,7 +251,7 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
       idx = 0
       curChunk = null
 
-      unstashAll()
+      checkStash()
     }
   }
 
@@ -319,10 +271,16 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
     }
   }
 
-  def receive: Receive = {
-    case Page(buff: ByteString, meta) if curChunk == null =>
-      ack()
+  def checkStash(): Unit = {
+    while (curChunk == null && stash.nonEmpty)
+      receiveInput(stash.removeHead())
 
+    if (stash.nonEmpty) context.parent ! PauseInput
+    else context.parent ! ResumeInput
+  }
+
+  def receiveInput: Receive = {
+    case Page(buff: ByteString, meta) if curChunk == null =>
       curChunk = buff
       curChunkSteps = meta.steps getOrElse format.StepsPerChunk
 
@@ -330,27 +288,28 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
       lastDirection = meta.directions
 
       consumeBuffer()
-    case Tick(x) =>
-      ticks += x
-
-      consumeBuffer()
-    case _: Page =>
-      stash()
     case setPos: SetPos if curChunk == null =>
       x = (setPos.x.getOrElse(pos.x) * stepsPer.x).round
       y = (setPos.y.getOrElse(pos.y) * stepsPer.y).round
       z = (setPos.z.getOrElse(pos.z) * stepsPer.z).round
       e = (setPos.e.getOrElse(pos.e) * stepsPer.e).round
+  }
 
-      ack()
-    case _: SetPos =>
-      stash()
+  def receive: Receive = {
+    case x: Page =>
+      stash += x
+      checkStash()
+    case x: SetPos =>
+      stash += x
+      checkStash()
+
+    case Tick(x) =>
+      ticks += x
+
+      consumeBuffer()
 
     case _: StepProcessor.SyncPos =>
-      ack()
-
     case _: Command =>
-      ack()
   }
 
   case class Tick(ticks: Double)
@@ -359,8 +318,10 @@ class MovementProcessor extends Actor with Stash with ActorLogging with Pipeline
 class MovementProcessorPos extends Actor with Stash with ActorLogging {
   import com.colingodsey.stepd.Math._
 
+  case object Unstash
+
   var t = 0.0
-  var trap: Trapezoid = null
+  var trap: MotionBlock = null
 
   MovementProcessor.f = getPos(_)
 
@@ -390,20 +351,15 @@ class MovementProcessorPos extends Actor with Stash with ActorLogging {
   }
 
   def receive: Receive = {
-    case x: Trapezoid if trap == null =>
+    case x: MotionBlock if trap == null =>
       synchronized {
         trap = x
         processTrap(0.0)
       }
 
-      sender ! Pipeline.Ack
-    case trap: Trapezoid =>
-      stash()
-    case Unstash =>
-      unstashAll()
-    case _: Command =>
-      sender ! Pipeline.Ack
-  }
+    case _: MotionBlock => stash()
+    case Unstash => unstashAll()
 
-  object Unstash
+    case _: Command =>
+  }
 }

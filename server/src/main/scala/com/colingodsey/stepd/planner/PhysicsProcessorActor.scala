@@ -47,6 +47,7 @@ class PhysicsProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends Phys
   }
 
   def jerk = cfg.jerk
+  def sJerk = cfg.sJerk
 
   def receive: Receive = {
     case delta: MoveDelta if delta.isEOrZOnly =>

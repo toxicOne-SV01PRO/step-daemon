@@ -36,7 +36,6 @@ object Build {
     version in ThisBuild ~= (version in LocalRootProject).transform,
 
     //resolvers in ThisBuild += "mvn repo" at "https://raw.githubusercontent.com/colinrgodsey/maven/master",
-    resolvers in ThisBuild += "mmreleases" at "https://artifactory.mediamath.com/artifactory/libs-release-global",
     resolvers in ThisBuild += Resolver.sonatypeRepo("releases"),
     resolvers in ThisBuild += "sonatype-snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
     resolvers in ThisBuild += "apache-snapshots" at "https://repository.apache.org/content/repositories/snapshots",

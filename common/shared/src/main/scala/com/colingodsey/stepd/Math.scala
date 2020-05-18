@@ -246,6 +246,7 @@ object Math { mathSelf =>
   case object PreEaseLimit extends EaseLimit
   case object PostEaseLimit extends EaseLimit
 
+  case object JerkFault extends MathFault
   case object LookaheadFault extends MathFault
 
   implicit val stepDEpsilon = Epsilon(1e-6)

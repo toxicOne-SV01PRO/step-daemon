@@ -58,6 +58,7 @@ object Pieces {
 
   trait Piece {
     def dt: Double
+    def isValid: Boolean
 
     def apply(dt: Double): Double
 
@@ -70,22 +71,18 @@ object Pieces {
     def int1(c0: Double): Double = int1At(dt, c0)
     def int2(c0: Double, c1: Double): Double = int2At(dt, c0, c1)
     def int3(c0: Double, c1: Double, c2: Double): Double = int3At(dt, c0, c1, c2)
-
-    //def int2(): Double = int2(0)
-    //def int3(): Double = int3(0, 0)
   }
 
   /**
    * N+1 order pulse, N order line.
    *
-   * @param c - N order constant
-   * @param dy - N+1 order slope
-   * @param int1 - N order first integral
+   * @param dy - N order slope
+   * @param area - N order first integral - c
    */
   case class Pulse(dy: Double, area: Double) extends Piece {
     val dt = if (dy == 0.0) 0.0 else area / dy
 
-    val isValid = dt >= 0
+    def isValid = dt >= 0.0
 
     def apply(dt: Double): Double = dy
 
@@ -102,63 +99,103 @@ object Pieces {
    *
    * @param head N+2 order pulse for head slope
    * @param tail N+2 order pulse for tail slope
-   * @param int1 N order first integral
+   * @param area N order first integral - c
+   * @param c N order constant
    */
-  case class Trapezoid(head: Piece, tail: Piece, area: Double) extends Piece {
+  case class Trapezoid(head: Piece, tail: Piece, area: Double, c: Double = 0) extends Piece {
     // one order lower than head and tail
-    val headArea = head.int2(0, 0)
-    val tailArea = tail.int2(0, head.int1(0))
-    val middle = Pulse(head.int1(0), area - headArea - tailArea)
-
-    //require((headArea + tailArea) <= area, s"head: $headArea, tail: $tailArea, area: $area")
-    println(s"head: $headArea, tail: $tailArea, area: $area")
+    val headArea = head.int2(0, c)
+    val tailArea = tail.int2(0, head.int1(c))
+    val middle = Pulse(head.int1(c), area - headArea - tailArea)
 
     val dtTailStart = head.dt + middle.dt
     val dt = dtTailStart + tail.dt
+
+    def isValid = head.isValid && middle.isValid && tail.isValid
 
     //each piece needs to reference the last piece for its cX values
     def apply(dt: Double): Double =
       if (dt > dtTailStart) tail.int1At(dt - dtTailStart, apply(dtTailStart))
       else if (dt > head.dt) apply(head.dt)
-      else head.int1At(dt, 0)
+      else head.int1At(dt, c)
 
     def int1At(dt: Double, c0: Double): Double =
       if (dt > dtTailStart) tail.int2At(dt - dtTailStart, int1At(dtTailStart, c0), apply(dtTailStart))
       else if (dt > head.dt) middle.int1At(dt - head.dt, int1At(head.dt, c0))
-      else head.int2At(dt, c0, 0)
+      else head.int2At(dt, c0, c)
 
     def int2At(dt: Double, c0: Double, c1: Double): Double =
       if (dt > dtTailStart) tail.int3At(dt - dtTailStart, int2At(dtTailStart, c0, c1), int1At(dtTailStart, c1), apply(dtTailStart))
       else if (dt > head.dt) middle.int2At(dt - head.dt, int2At(head.dt, c0, c1), int1At(head.dt, c1))
-      else head.int3At(dt, c0, c1, 0)
+      else head.int3At(dt, c0, c1, c)
 
-    def int3At(dt: Double, c0: Double, c1: Double, c2: Double) = Double.NaN
+    def int3At(dt: Double, c0: Double, c1: Double, c2: Double) = Double.NaN //???
   }
+
 }
 
-/*final case class VTrapezoidNew(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double)
+final case class ATrapezoid(
+  frStart: Double, frStartJerk: Double, frAccel: Double,
+  frJerk: Double, move: MoveDelta,
+  frDeccel: Double, frEndJerk: Double, frEnd: Double)
     extends MotionBlock {
   import Pieces._
 
+  val startArea = move.f - frStart
+  val endArea = frEnd - move.f
+
   val shape = Trapezoid(
-    Pulse(frStart, frAccel, move.f),
-    Pulse(move.f, frDeccel, frEnd),
-    move.length
+    Trapezoid(
+      Pulse(frStartJerk, frAccel),
+      Pulse(-frJerk, -frAccel),
+      startArea
+    ),
+    Trapezoid(
+      Pulse(-frJerk, frDeccel),
+      Pulse(frEndJerk, -frDeccel),
+      endArea
+    ),
+    move.length,
+    frStart
   )
 
   def time = shape.dt
 
-  //if (shape.middle.dt < 0.0) {
-  if ((shape.head.int2 + shape.tail.int2) > move.length) {
-    if (shape.head.int2 > shape.tail.int2) throw PreEaseLimit
+  if (!shape.isValid) {
+    if (frStart > frEnd) throw PreEaseLimit
     else throw PostEaseLimit
   }
 
   def getPos(dt: Double): Double =
-    clamp(0.0, shape.int1At(dt), move.length)
-}*/
+    clamp(0.0, shape.int1At(dt, 0), move.length)
+}
 
 final case class VTrapezoid(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double)
+  extends MotionBlock {
+  import Pieces._
+
+  val startArea = move.f - frStart
+  val endArea = frEnd - move.f
+
+  val shape = Trapezoid(
+    Pulse(frAccel, startArea),
+    Pulse(frDeccel, endArea),
+    move.length,
+    frStart
+  )
+
+  def time = shape.dt
+
+  if (!shape.isValid) {
+    if (frStart > frEnd) throw PreEaseLimit
+    else throw PostEaseLimit
+  }
+
+  def getPos(dt: Double): Double =
+    clamp(0.0, shape.int1At(dt, 0), move.length)
+}
+
+final case class VTrapezoidOld(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double)
     extends MotionBlock {
   val accelDf = move.f - frStart
   val accelTime = if (frAccel == 0) 0.0 else accelDf / frAccel

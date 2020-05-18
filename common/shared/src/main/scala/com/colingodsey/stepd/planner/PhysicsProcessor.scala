@@ -18,6 +18,8 @@ package com.colingodsey.stepd.planner
 
 import com.colingodsey.stepd.Math._
 
+import scala.util.control.NonFatal
+
 /* takes move deltas, and produces iterable positions */
 object PhysicsProcessor {
   final val MaxResizes = 30
@@ -32,6 +34,7 @@ trait PhysicsProcessor {
 
   def acc: Vec4
   def jerk: Vec4
+  def sJerk: Vec4
 
   def recordFault(fault: MathFault): Unit
 
@@ -76,29 +79,32 @@ trait PhysicsProcessor {
 
   Invalid pre or post moves force a junction fr of 0.
    */
-  def createTrapezoid(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta): Unit = {
+  def createTrapezoid(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta, useATrap: Boolean): Unit = {
+    //TODO: classic jerk is broken... comparison wrong?
+
     val dvStart = moveDelta.v - pre.v
+    val frStartJerk = dvStart.abs.normal ⋅ sJerk
     val frMaxStart = math.min(moveDelta.f, pre.f)
     val frStart = if (pre.isValid) frMaxStart * {
       val f = pre.d.normal ⋅ moveDelta.d.normal
       val jf = dvStart.abs ⋅ jerk.normal
 
-      //TODO: use jerk factor as lower bounds for clamp? scaled for the fr...
-
-      if (jf < jerk.length) 1.0
-      else clamp(0.0, f, 1.0)
+      /*if (jf > jerk.length) 1.0
+      else */clamp(0.0, f, 1.0)
     } else 0.0
 
     val frAccel = moveDelta.d.abs.normal ⋅ acc
+    val frJerk = moveDelta.d.abs.normal ⋅ sJerk
 
     val dvEnd = post.v - moveDelta.v
+    val frEndJerk = dvEnd.abs.normal ⋅ sJerk
     val frMaxEnd = math.min(moveDelta.f, post.f)
     val frEnd = if (post.isValid) frMaxEnd * {
       val f = moveDelta.d.normal ⋅ post.d.normal
       val jf = dvEnd.abs ⋅ jerk.normal
 
-      if (jf < jerk.length) 1.0
-      else clamp(0.0, f, 1.0)
+      /*if (jf > jerk.length) 1.0
+      else */clamp(0.0, f, 1.0)
     } else 0.0
 
     val frDeccel = -frAccel
@@ -108,20 +114,29 @@ trait PhysicsProcessor {
     require(frAccel >= 0)
     require(frDeccel <= 0)
 
-    process(VTrapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd))
+    process(useATrap match {
+      case true => ATrapezoid(frStart, frStartJerk, frAccel, frJerk, moveDelta, frDeccel, frEndJerk, frEnd)
+      case false => VTrapezoid(frStart, frAccel, moveDelta, frDeccel, frEnd)
+    })
   }
 
-  def createTrapezoidSafe(pre: MoveDelta, moveDelta: MoveDelta, post: MoveDelta, maxTimes: Int = maxResizes): Unit = {
-    if(!moveDelta.isValid) return
+  def createTrapezoidSafe(pre: MoveDelta, move: MoveDelta, post: MoveDelta,
+    scale: Double = 1.0, useATrap: Boolean = true, maxTimes: Int = maxResizes): Unit = {
+    if(!move.isValid) return
 
-    try createTrapezoid(pre, moveDelta, post) catch {
+    try createTrapezoid(pre, move scaleFr scale, post, useATrap) catch {
+      case _: EaseLimit if maxTimes == 0 && useATrap =>
+        //fall back to the normal VTrapezoid if we fail on the ATrap version
+        recordFault(JerkFault)
+        createTrapezoidSafe(pre, move, post, useATrap=false)
       case x: EaseLimit if maxTimes == 0 =>
-        sys.error("Failed reducing trapezoid for acceleration")
+        sys.error(s"Failed reducing trapezoid for acceleration. pre: $pre, move: $move, post:$post")
         recordFault(x)
       case x: EaseLimit =>
         if(maxTimes == maxResizes) recordFault(x)
 
-        createTrapezoidSafe(pre, moveDelta scaleFr ResizeFactor, post, maxTimes - 1)
+        createTrapezoidSafe(pre, move, post,
+          useATrap = useATrap, scale = scale * ResizeFactor, maxTimes = maxTimes - 1)
     }
   }
 

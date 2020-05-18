@@ -37,11 +37,13 @@ object ConfigMaker {
   def plannerConfig = {
     val accel = planner.getDoubleList("acceleration").asScala
     val jerk = planner.getDoubleList("jerk").asScala
+    val sJerk = planner.getDoubleList("s-jerk").asScala
     val stepsPerMM = planner.getDoubleList("steps-per-mm").asScala
 
     PlannerConfig(
       accel = Vec4(accel(_)),
       jerk = Vec4(jerk(_)),
+      sJerk = Vec4(sJerk(_)),
       stepsPerMM = Vec4(stepsPerMM(_)),
       ticksPerSecond = planner.getInt("ticks-per-second"),
       format = planner.getString("format").toLowerCase match {

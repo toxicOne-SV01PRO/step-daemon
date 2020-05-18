@@ -30,6 +30,7 @@ object CartesianTest extends TestSuite {
   class FrogIterator extends CartesianChunkIterator(frogGCode, StepProcessor.PageFormat.SP_4x4D_128) {
     val acc = Vec4(2000, 1500, 100, 10000)
     val jerk = Vec4(15, 10, 0.4f, 5)
+    val sJerk = Vec4.One * 1e10
     val stepsPerMM = Vec4(80, 80, 1600, 95.2)
     val ticksPerSecond: Int = 30000
 
