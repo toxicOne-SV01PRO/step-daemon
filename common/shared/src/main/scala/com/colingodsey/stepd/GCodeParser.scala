@@ -40,9 +40,11 @@ trait GCodeParser {
       case "G92" => SetPos(raw)
 
       case "M114" => GetPos
+
       case "M201" => SetMaxAcceleration(raw)
       case "M220" => FeedRate(raw)
       case "M221" => FlowRate(raw)
+      case "M900" => LinearAdvanceFactor(raw)
 
       case _ => raw
     }

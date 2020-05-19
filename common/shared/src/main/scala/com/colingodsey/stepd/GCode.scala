@@ -184,4 +184,11 @@ object GCode {
   }
 
   case class FeedRate(perc: Option[Double])(val raw: Raw) extends MCommand
+
+  object LinearAdvanceFactor {
+    def apply(raw: Raw): LinearAdvanceFactor =
+      LinearAdvanceFactor(raw.getPart('K').map(_.toDouble))(raw)
+  }
+
+  case class LinearAdvanceFactor(k: Option[Double])(val raw: Raw) extends MCommand
 }

@@ -26,7 +26,9 @@ final case class MoveDelta(from: Vec4, to: Vec4, f: Double) {
   val d = to - from
   val time = (d.length / f)
   val v = d / time
+
   val isValid = d.length > 0
+  val isPrintMove = d.e > 0 && !isEOrZOnly
 
   def length = d.length
 

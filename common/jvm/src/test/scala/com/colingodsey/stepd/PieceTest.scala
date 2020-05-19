@@ -34,6 +34,11 @@ object PieceTest extends TestSuite {
 
     val img = new BufferedImage(nx, nx, BufferedImage.TYPE_INT_RGB)
 
+    val eaShape = ElasticAdvance(shape, 0.1, 1.0)
+
+    def eaint0vals = for (i <- 0 until nx) yield i -> eaShape(i * dx)
+    def eaint1vals = for (i <- 0 until nx) yield i -> eaShape.int1At(i * dx, 0)
+
     def int0vals = for (i <- 0 until nx) yield i -> shape(i * dx)
     def int1vals = for (i <- 0 until nx) yield i -> shape.int1At(i * dx, 0)
     def int2vals = for (i <- 0 until nx) yield i -> shape.int2At(i * dx, 0, 0)
@@ -59,6 +64,8 @@ object PieceTest extends TestSuite {
       }
     }
 
+    drawPoints(eaint0vals, Color.MAGENTA.getRGB)
+    drawPoints(eaint1vals, Color.CYAN.getRGB)
     drawPoints(int0vals, Color.GREEN.getRGB)
     drawPoints(int1vals, Color.RED.getRGB)
     drawPoints(int2vals, Color.YELLOW.getRGB)
@@ -66,15 +73,15 @@ object PieceTest extends TestSuite {
     ImageIO.write(img, "PNG", new File(name))
   }
 
-  val jerk = 10
+  val jerk = 5 //10
 
   val accel = 2.5
   val deccel = -accel
 
-  val dvStart = 5
+  val dvStart = 10 //5
   val dvEnd = -10
 
-  val startV = 5
+  val startV = 0 //5
   val dist = 50
 
   /*val accel = 2441.86

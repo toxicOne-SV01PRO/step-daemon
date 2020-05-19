@@ -91,7 +91,7 @@ object DummyTest extends TestSuite {
         val trap = phase.trap
         var dt = 0.0
 
-        trap.posIterator(tick) foreach { pos =>
+        trap.posIterator(tick, 0) foreach { pos =>
           pointFunc(pos, dt + t)
 
           dt += tick

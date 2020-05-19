@@ -78,9 +78,14 @@ class StepProcessorActor(val next: ActorRef, cfg: PlannerConfig) extends StepPro
       flushChunk()
       next ! ZProbe
       context.parent ! PauseInput
+
     case a @ FlowRate(Some(x)) =>
       flowRate = x / 100.0
       log info s"setting flow rate scale to $flowRate"
+      next ! a
+    case a @ LinearAdvanceFactor(Some(x)) =>
+      eAdvanceK = x
+      log info s"setting linear advance factor to $eAdvanceK"
       next ! a
 
     case x: Command if x.isGCommand =>

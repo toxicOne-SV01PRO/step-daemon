@@ -23,8 +23,9 @@ sealed trait MotionBlock {
   def move: MoveDelta
 
   def getPos(t: Double): Double
+  def getVel(dt: Double): Double
 
-  def posIterator(tickRate: Double): Iterator[Vec4] = new Iterator[Vec4] {
+  def posIterator(tickRate: Double, eAdvanceK: Double): Iterator[Vec4] = new Iterator[Vec4] {
     val ticks = (time * tickRate).toInt
     val div = time / ticks
 
@@ -33,12 +34,20 @@ sealed trait MotionBlock {
     def hasNext: Boolean = tick < ticks
 
     def next(): Vec4 = {
+      val dt = tick * div
+
       val x = if(tick == 0) move.from
-      else move.from + move.d.normal * getPos(tick * div)
+      else move.from + move.d.normal * getPos(dt)
+
+      val eFac = getVel(dt) * move.d.normal.e * eAdvanceK
+      val eOffset = move.isPrintMove match {
+        case true => Vec4.E * eFac
+        case false => Vec4.Zero
+      }
 
       tick += 1
 
-      x
+      x + eOffset
     }
   }
 }
@@ -59,6 +68,8 @@ object Pieces {
   trait Piece {
     def dt: Double
     def isValid: Boolean
+
+    def der1At(dt: Double): Double
 
     def apply(dt: Double): Double
 
@@ -83,6 +94,8 @@ object Pieces {
     val dt = if (dy == 0.0) 0.0 else area / dy
 
     def isValid = dt >= 0.0
+
+    def der1At(dt: Double): Double = 0.0
 
     def apply(dt: Double): Double = dy
 
@@ -113,6 +126,11 @@ object Pieces {
 
     def isValid = head.isValid && middle.isValid && tail.isValid
 
+    def der1At(dt: Double): Double =
+      if (dt > dtTailStart) tail.apply(dt - dtTailStart)
+      else if (dt > head.dt) 0.0
+      else head.apply(dt)
+
     //each piece needs to reference the last piece for its cX values
     def apply(dt: Double): Double =
       if (dt > dtTailStart) tail.int1At(dt - dtTailStart, apply(dtTailStart))
@@ -132,6 +150,20 @@ object Pieces {
     def int3At(dt: Double, c0: Double, c1: Double, c2: Double) = Double.NaN //???
   }
 
+  case class ElasticAdvance(piece: Piece, kFactor: Double, pieceFactor: Double) extends Piece {
+    def dt: Double = piece.dt
+    def isValid: Boolean = piece.isValid
+
+    def der1At(dt: Double): Double = Double.NaN
+
+    def apply(dt: Double): Double = piece.apply(dt) + piece.der1At(dt) * kFactor * pieceFactor
+
+    def int1At(dt: Double, c0: Double): Double = piece.int1At(dt, c0) + piece(dt) * kFactor * pieceFactor
+
+    def int2At(dt: Double, c0: Double, c1: Double): Double = Double.NaN
+
+    def int3At(dt: Double, c0: Double, c1: Double, c2: Double): Double = Double.NaN
+  }
 }
 
 final case class ATrapezoid(
@@ -168,10 +200,12 @@ final case class ATrapezoid(
 
   def getPos(dt: Double): Double =
     clamp(0.0, shape.int1At(dt, 0), move.length)
+
+  def getVel(dt: Double): Double = shape(dt)
 }
 
 final case class VTrapezoid(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double)
-  extends MotionBlock {
+    extends MotionBlock {
   import Pieces._
 
   val startArea = move.f - frStart
@@ -193,6 +227,8 @@ final case class VTrapezoid(frStart: Double, frAccel: Double, move: MoveDelta, f
 
   def getPos(dt: Double): Double =
     clamp(0.0, shape.int1At(dt, 0), move.length)
+
+  def getVel(dt: Double): Double = shape(dt)
 }
 
 final case class VTrapezoidOld(frStart: Double, frAccel: Double, move: MoveDelta, frDeccel: Double, frEnd: Double)
@@ -237,4 +273,6 @@ final case class VTrapezoidOld(frStart: Double, frAccel: Double, move: MoveDelta
 
     clamp(0.0, ret, move.length)
   }
+
+  def getVel(dt: Double): Double = 0.0
 }
