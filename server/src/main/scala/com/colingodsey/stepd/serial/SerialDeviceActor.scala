@@ -51,7 +51,8 @@ class SerialDeviceActor(cfg: DeviceConfig) extends Actor with Stash with ActorLo
     val finalBytes = bytes ++ ByteString.fromString(s"*$check\r\n")
 
     //log.info("send: {}*{} ({})", str0, check, pending.size)
-    log.info("send: {}*{}", str0, check)
+
+    log.debug("send: {}*{}", str0, check)
 
     lineSerial ! Serial.Bytes(finalBytes)
   }

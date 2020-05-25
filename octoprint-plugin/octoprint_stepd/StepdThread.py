@@ -63,7 +63,7 @@ class StepdThread(Thread):
 
     jvm_args = ['-Xmx64M', '-XX:+UseG1GC', '-XX:ParallelGCThreads=4',
                 '-XX:ConcGCThreads=2', '-XX:MaxGCPauseMillis=5']
-    process = subprocess.Popen(['java', '-jar', 'stepd.jar'] + jvm_args,
+    process = subprocess.Popen(['java'] + jvm_args + ['-jar', 'stepd.jar'],
                                stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE,
                                universal_newlines=True,

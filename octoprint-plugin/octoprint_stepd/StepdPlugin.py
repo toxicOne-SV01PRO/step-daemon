@@ -109,7 +109,7 @@ class StepdPlugin(octoprint.plugin.SettingsPlugin,
     while not self.thread or not self.thread.running:
       if wait_s <= 0:
         comm_instance._log("Failed waiting for stepd...")
-        return None
+        break
 
       wait_s -= 1
       time.sleep(1)
@@ -118,9 +118,7 @@ class StepdPlugin(octoprint.plugin.SettingsPlugin,
 
     port = '/tmp/pty-stepd-client'
 
-    serial_obj = serial.Serial(str(port), 230400, writeTimeout=10000)
-
-    return serial_obj
+    return serial.Serial(str(port), 230400, writeTimeout=10000)
 
   ##~~ StartupPlugin mixin
   def on_after_startup(self):
