@@ -2,9 +2,9 @@ com.colingodsey.stepd {
   planner {
     acceleration = [1500, 1000, 100, 10000]
     jerk = [7, 5, 0.2, 2.5]
+    s-jerk = [1e8, 1e7, 1e6, 1e10]
     steps-per-mm = [80, 80, 1600, 95.2]
     ticks-per-second = 61440
-
     format = "SP_4x2_256"
   }
 
@@ -15,6 +15,6 @@ com.colingodsey.stepd {
 
   device {
     baud = 500000
-    dev = "/dev/tty.usbserial-A9C7RPDD"
+    dev = "/dev/ttyUSB0"
   }
 }
