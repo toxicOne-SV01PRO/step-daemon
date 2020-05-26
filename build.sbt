@@ -3,8 +3,6 @@ enablePlugins(ScalaJSPlugin)
 
 ThisBuild / scalaVersion := "2.13.2"
 
-javacOptions ++= Seq("-source", "1.11", "-target", "1.11")
-
 lazy val common = crossProject(JSPlatform, JVMPlatform).in(file("common"))
     .settings(name := "print-server-common")
     .settings(Build.commonSettings: _*)

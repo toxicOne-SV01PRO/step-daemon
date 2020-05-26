@@ -24,6 +24,7 @@ import com.colingodsey.stepd.serial.{LineSerial, SerialDeviceActor}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.io.Source
 import scala.util.control.NoStackTrace
 
 /**
@@ -98,14 +99,30 @@ class PrintPipelineActor(proxy: ActorRef, device: ActorRef) extends Actor with A
 }
 
 object Server extends App {
-  val system = ActorSystem("stepd", ConfigMaker.config)
+  val classLoader = getClass.getClassLoader
+
+  val system = ActorSystem("stepd", ConfigMaker.config, classLoader)
 
   sys.addShutdownHook {
+    if (sys.env contains "STEPD_DUMP_CLASSES") {
+      var classNames = Set[String]()
+
+      ClassGetter foreach {
+        case x: Class[_] =>
+          classNames += x.getName
+        case _ =>
+      }
+
+      println(classNames.mkString("\n"))
+    }
+
     Await.result(system.terminate(), 10.seconds)
   }
 
   //prevent AWT from opening a window
   System.setProperty("java.awt.headless", "true")
+
+  preloadClasses()
 
   {
     val device = system.actorOf(Props(classOf[SerialDeviceActor], ConfigMaker.deviceConfig), name="device")
@@ -113,5 +130,23 @@ object Server extends App {
 
     system.actorOf(Props(classOf[MeshLevelingActor], ConfigMaker.levelingConfig), name="bed-level")
     system.actorOf(Props(classOf[PrintPipelineActor], proxy, device), name="pipeline")
+  }
+
+  def preloadClasses(): Unit = {
+    val lines = Source.fromResource("bootstrap-classes.txt").getLines
+
+    var loaded = 0
+    var failed = 0
+
+    lines foreach { name =>
+      try {
+        classLoader.loadClass(name)
+        loaded += 1
+      } catch {
+        case _: Throwable => failed += 1
+      }
+    }
+
+    println(s"Preloaded $loaded classes, and $failed failed")
   }
 }
